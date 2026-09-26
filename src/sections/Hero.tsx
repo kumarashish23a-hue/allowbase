@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { ArrowRight, Play } from 'lucide-react';
+import { ArrowRight, Check, Play } from 'lucide-react';
 import { ArchitectureDiagram } from '../components/ArchitectureDiagram';
 import { DashboardPreview } from '../components/DashboardPreview';
 import { Reveal } from '../components/Reveal';
@@ -9,6 +9,8 @@ const VantaNet = lazy(() =>
 );
 
 const stackCategories = ['LLMs', 'AI Agents', 'Databases', 'Data Warehouses', 'Internal AI', 'APIs'];
+
+const heroAssurances = ['Metadata-only discovery', 'Deterministic policy engine', 'Append-only audit log'];
 
 export function Hero() {
   return (
@@ -21,7 +23,7 @@ export function Hero() {
           <span className="inline-flex items-center gap-2 rounded-full border border-line bg-ink-900/70 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-600">
             AI Data Infrastructure
           </span>
-          <h1 className="mt-6 text-4xl font-bold tracking-tight text-mist-100 sm:text-5xl lg:text-[4.25rem] lg:leading-[1.04]">
+          <h1 className="mt-6 text-balance text-4xl font-bold tracking-tight text-mist-100 sm:text-5xl lg:text-[4.25rem] lg:leading-[1.04]">
             Give AI access to your data — without losing control.
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-mist-400 sm:text-lg">
@@ -31,7 +33,7 @@ export function Hero() {
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <a
               href="#get-started"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent-500 px-6 py-3.5 text-sm font-semibold text-[#06202a] transition hover:bg-accent-400 sm:w-auto"
+              className="btn-primary inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent-500 px-6 py-3.5 text-sm font-semibold text-[#06202a] transition hover:bg-accent-400 sm:w-auto"
             >
               Get Started <ArrowRight size={16} />
             </a>
@@ -42,6 +44,14 @@ export function Hero() {
               <Play size={16} /> Explore Platform
             </a>
           </div>
+          <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+            {heroAssurances.map((assurance) => (
+              <li key={assurance} className="inline-flex items-center gap-1.5 text-xs font-medium text-mist-500">
+                <Check size={14} className="text-accent-600" strokeWidth={2.5} />
+                {assurance}
+              </li>
+            ))}
+          </ul>
         </Reveal>
 
         <Reveal delay={0.15} className="mx-auto mt-14 max-w-4xl text-center">

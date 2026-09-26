@@ -259,15 +259,15 @@ export const connectedSources: DataSource[] = [
 ];
 
 export const securityFeatures: SecurityFeature[] = [
-  { title: 'Data Discovery', description: 'Continuously map databases, files, repos, and SaaS systems.' },
-  { title: 'Sensitive Data Detection', description: 'Classify PII, financial data, credentials, and source code.' },
-  { title: 'AI Access Control', description: 'Decide which models and agents can reach which data.' },
-  { title: 'Policy Enforcement', description: 'Evaluate every request against enforceable policy.' },
-  { title: 'Data Redaction', description: 'Remove or mask sensitive fields before AI sees them.' },
-  { title: 'AI Agent Permissions', description: 'Scope agents to explicit data and action permissions.' },
-  { title: 'Audit Logs', description: 'Record who accessed what, when, why, and the decision.' },
-  { title: 'Risk Detection', description: 'Surface anomalous access and risky AI behavior early.' },
-  { title: 'Data Provenance', description: 'Trace sensitive data from source to AI destination.' },
+  { title: 'Data Discovery', description: 'Continuously map databases, warehouses, files, and SaaS — down to the column, from metadata alone.' },
+  { title: 'Sensitive Data Detection', description: 'Deterministic classification of PII, financial records, credentials, and secrets. Low-confidence fields are flagged for human review — never guessed.' },
+  { title: 'AI Access Control', description: 'Grant models and agents read access per dataset. Everything else is denied by default.' },
+  { title: 'Policy Enforcement', description: 'Every request is evaluated against versioned policy before any data flows.' },
+  { title: 'Data Redaction', description: 'Mask or drop sensitive fields before they ever reach the model.' },
+  { title: 'AI Agent Permissions', description: 'Scope each agent to explicit datasets and actions. Least privilege, enforced.' },
+  { title: 'Audit Logs', description: 'An append-only record of who accessed what, when, why — and the decision made.' },
+  { title: 'Risk Detection', description: 'Early signals on anomalous access patterns and risky agent behavior.' },
+  { title: 'Data Provenance', description: 'Trace sensitive fields from the source system to the AI destination.' },
 ];
 
 export const useCases: UseCase[] = [

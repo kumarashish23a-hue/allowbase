@@ -54,7 +54,14 @@ export function Footer() {
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-mist-500">
               Control the data layer behind AI.
             </p>
-            <p className="mt-4 text-xs text-mist-600">Frontend prototype. All data shown is simulated.</p>
+            <p className="mt-4 max-w-xs text-xs leading-relaxed text-mist-600">
+              Security model:{' '}
+              <a href="#security" className="text-mist-500 underline decoration-line-strong underline-offset-2 transition hover:text-mist-200">
+                metadata-only discovery, deterministic policy, deny-by-default enforcement
+              </a>
+              .
+            </p>
+            <p className="mt-3 text-xs text-mist-600">Frontend prototype. All data shown is simulated.</p>
           </div>
           <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
             {columns.map((column) => (

@@ -92,7 +92,7 @@ export function Navbar({ onSignIn, onProfile }: NavbarProps) {
           {authButton}
           <a
             href="#get-started"
-            className="rounded-lg bg-accent-500 px-4 py-2 text-sm font-semibold text-[#06202a] shadow-card transition hover:bg-accent-400"
+            className="btn-primary rounded-lg bg-accent-500 px-4 py-2 text-sm font-semibold text-[#06202a] transition hover:bg-accent-400"
           >
             Get Started
           </a>

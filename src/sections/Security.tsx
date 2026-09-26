@@ -40,6 +40,12 @@ export function Security() {
             );
           })}
         </div>
+        <Reveal delay={0.1}>
+          <p className="mx-auto mt-10 max-w-3xl text-center text-sm leading-relaxed text-mist-500">
+            Designed to support SOC 2, ISO 27001, HIPAA, and GDPR programs — with versioned policies and a complete
+            audit trail as evidence.
+          </p>
+        </Reveal>
       </div>
     </section>
   );

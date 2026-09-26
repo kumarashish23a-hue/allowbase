@@ -10,6 +10,7 @@ import { FinalCta } from './sections/FinalCta';
 import { Footer } from './sections/Footer';
 import { Hero } from './sections/Hero';
 import { HowItWorks } from './sections/HowItWorks';
+import { TrustPrinciples } from './sections/TrustPrinciples';
 import { Platform } from './sections/Platform';
 import { PolicyEngine } from './sections/PolicyEngine';
 import { Pricing } from './sections/Pricing';
@@ -71,6 +72,7 @@ function App() {
         <Hero />
         <Problem />
         <HowItWorks />
+        <TrustPrinciples />
         <Platform />
         <AIRequest onSimulate={openSimulator} />
         <PolicyEngine />
