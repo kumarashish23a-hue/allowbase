@@ -80,7 +80,7 @@ export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
 
   const pendingApproval = result?.approvalRequired === true;
   const decisionTone = pendingApproval
-    ? 'border-accent-400/30 bg-accent-400/10 text-accent-300'
+    ? 'border-accent-400/30 bg-accent-400/10 text-accent-600'
     : result?.decision === 'BLOCK'
       ? 'border-rose-400/30 bg-rose-400/10 text-rose-400'
       : result?.decision === 'REDACT'
@@ -168,7 +168,7 @@ export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
                       completed
                         ? 'border-mint-400/50 bg-mint-400/10 text-mint-400'
                         : active
-                          ? 'border-accent-400/60 bg-accent-500/15 text-accent-200'
+                          ? 'border-accent-400/60 bg-accent-500/15 text-accent-600'
                           : 'border-line text-mist-600'
                     }`}
                   >
@@ -191,7 +191,7 @@ export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
               </span>
               <p className="mt-3 text-sm text-mist-200">{result.reason}</p>
               {pendingApproval ? (
-                <p className="mt-3 rounded-lg border border-accent-400/20 bg-accent-400/5 px-3 py-2 text-xs text-accent-200">
+                <p className="mt-3 rounded-lg border border-accent-400/20 bg-accent-400/5 px-3 py-2 text-xs text-accent-600">
                   A policy requires human approval. An owner or admin can allow or reject it in the Approvals section.
                 </p>
               ) : null}

@@ -126,7 +126,7 @@ export function Agents() {
             <Reveal key={agent.id} delay={index * 0.06}>
               <div className="flex h-full flex-col rounded-xl border border-line bg-ink-950/60 p-6 shadow-card">
                 <div className="flex items-start justify-between gap-3">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-ink-800 text-accent-300">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-ink-800 text-accent-600">
                     <Bot size={18} />
                   </span>
                   <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold tracking-[0.12em] ${riskTone[agent.risk]}`}>
@@ -172,7 +172,7 @@ export function Agents() {
                     <button
                       type="button"
                       onClick={() => setExpanded((current) => (current === agent.id ? null : agent.id))}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent-300 transition hover:text-accent-200"
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-accent-600 transition hover:text-accent-600"
                       aria-expanded={expanded === agent.id}
                     >
                       <ChevronDown size={14} className={`transition ${expanded === agent.id ? 'rotate-180' : ''}`} />

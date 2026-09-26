@@ -26,7 +26,7 @@ const toneClass: Record<string, string> = {
   warn: 'text-amber-400',
 };
 
-const riskColors = ['#34d399', '#f59e0b', '#f87171'];
+const riskColors = ['#059669', '#d97706', '#dc2626'];
 
 interface TooltipEntry {
   name?: string;
@@ -127,7 +127,7 @@ export function Dashboard() {
               type="button"
               onClick={() => setRange(item)}
               className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                range === item ? 'bg-accent-500/20 text-accent-200' : 'text-mist-500 hover:text-mist-200'
+                range === item ? 'bg-accent-500/20 text-accent-600' : 'text-mist-500 hover:text-mist-200'
               }`}
             >
               {item}

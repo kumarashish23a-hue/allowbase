@@ -197,7 +197,7 @@ export function ProfileModal({ open, onClose, onOpenSetup }: ProfileModalProps) 
         <div className="space-y-6">
           {/* Identity */}
           <div className="flex items-center gap-4 rounded-xl border border-line bg-ink-950/60 p-5">
-            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-accent-500/20 text-2xl font-bold text-accent-200">
+            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-accent-500/20 text-2xl font-bold text-accent-600">
               {initial}
             </span>
             <div className="min-w-0">
@@ -210,7 +210,7 @@ export function ProfileModal({ open, onClose, onOpenSetup }: ProfileModalProps) 
           {/* Editable profile */}
           <div className="rounded-xl border border-line bg-ink-950/60 p-5">
             <div className="flex items-center gap-2">
-              <UserRound size={16} className="text-accent-300" />
+              <UserRound size={16} className="text-accent-600" />
               <h4 className="text-sm font-semibold text-mist-100">Profile details</h4>
             </div>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -270,7 +270,7 @@ export function ProfileModal({ open, onClose, onOpenSetup }: ProfileModalProps) 
           {/* Organization */}
           <div className="rounded-xl border border-line bg-ink-950/60 p-5">
             <div className="flex items-center gap-2">
-              <Building2 size={16} className="text-accent-300" />
+              <Building2 size={16} className="text-accent-600" />
               <h4 className="text-sm font-semibold text-mist-100">Organization</h4>
             </div>
             {org ? (
@@ -278,7 +278,7 @@ export function ProfileModal({ open, onClose, onOpenSetup }: ProfileModalProps) 
                 <div className="flex flex-wrap items-center gap-3">
                   <p className="text-base font-semibold text-mist-100">{org.name}</p>
                   {role ? (
-                    <span className="inline-flex items-center gap-1.5 rounded-full border border-accent-400/30 bg-accent-500/10 px-2.5 py-1 text-xs font-semibold text-accent-200">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-accent-400/30 bg-accent-500/10 px-2.5 py-1 text-xs font-semibold text-accent-600">
                       <ShieldCheck size={12} />
                       {role}
                     </span>
@@ -341,7 +341,7 @@ export function ProfileModal({ open, onClose, onOpenSetup }: ProfileModalProps) 
                 onClose();
                 onOpenSetup();
               }}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-accent-500/40 bg-accent-500/10 px-4 py-3 text-sm font-semibold text-accent-300 transition hover:border-accent-400/60 hover:text-accent-200"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-accent-500/40 bg-accent-500/10 px-4 py-3 text-sm font-semibold text-accent-600 transition hover:border-accent-400/60 hover:text-accent-600"
             >
               <Building2 size={15} />
               Complete workspace setup

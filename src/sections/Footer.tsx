@@ -45,7 +45,7 @@ export function Footer() {
           <div>
             <div className="flex items-center gap-3">
               <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-ink-800">
-                <ShieldCheck size={18} className="text-accent-300" />
+                <ShieldCheck size={18} className="text-accent-600" />
               </span>
               <span className="text-[13px] font-bold uppercase tracking-[0.18em] text-mist-100">
                 Data Control Plane

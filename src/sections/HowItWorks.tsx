@@ -18,7 +18,7 @@ export function HowItWorks() {
               <Reveal key={step.index} delay={index * 0.06}>
                 <div className="relative grid gap-6 rounded-xl border border-line bg-ink-950/60 p-6 sm:p-8 lg:grid-cols-[80px_1fr_1fr] lg:items-start">
                   <div className="flex lg:justify-center">
-                    <span className="flex h-14 w-14 items-center justify-center rounded-xl border border-accent-400/40 bg-accent-500/10 text-sm font-bold text-accent-200">
+                    <span className="flex h-14 w-14 items-center justify-center rounded-xl border border-accent-400/40 bg-accent-500/10 text-sm font-bold text-accent-600">
                       {step.index}
                     </span>
                   </div>
@@ -26,7 +26,7 @@ export function HowItWorks() {
                     <h3 className="text-xl font-semibold tracking-tight text-mist-100">{step.title}</h3>
                     <p className="mt-2 text-sm leading-relaxed text-mist-400">{step.description}</p>
                     {step.example ? (
-                      <p className="mt-4 rounded-xl border border-line bg-ink-900/70 px-4 py-3 text-sm text-accent-200">
+                      <p className="mt-4 rounded-xl border border-line bg-ink-900/70 px-4 py-3 text-sm text-accent-600">
                         {step.example}
                       </p>
                     ) : null}

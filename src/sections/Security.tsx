@@ -30,7 +30,7 @@ export function Security() {
             return (
               <Reveal key={feature.title} delay={index * 0.05}>
                 <div className="h-full rounded-xl border border-line bg-ink-950/60 p-6 shadow-card transition hover:border-line-strong">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-ink-800 text-accent-300">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-ink-800 text-accent-600">
                     <Icon size={18} />
                   </span>
                   <h3 className="mt-4 text-base font-semibold text-mist-100">{feature.title}</h3>

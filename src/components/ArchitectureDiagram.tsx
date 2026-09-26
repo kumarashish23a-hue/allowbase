@@ -112,7 +112,7 @@ export function ArchitectureDiagram() {
                     active ? 'border-accent-400/60 bg-accent-500/10 text-mist-100' : 'border-line bg-ink-800/60 text-mist-300'
                   }`}
                 >
-                  <Icon size={16} className={active ? 'text-accent-300' : 'text-mist-500'} />
+                  <Icon size={16} className={active ? 'text-accent-600' : 'text-mist-500'} />
                   {source}
                 </div>
               );
@@ -122,7 +122,7 @@ export function ArchitectureDiagram() {
 
         <div className="rounded-lg border border-accent-400/30 bg-ink-950/70 p-5 sm:p-6">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-300">Data Control Plane</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-600">Data Control Plane</p>
             <button
               type="button"
               onClick={restart}
@@ -143,7 +143,7 @@ export function ArchitectureDiagram() {
                       isDone
                         ? 'border-mint-400/50 bg-mint-400/10 text-mint-400'
                         : isActive
-                          ? 'border-accent-400/70 bg-accent-500/15 text-accent-200'
+                          ? 'border-accent-400/70 bg-accent-500/15 text-accent-600'
                           : 'border-line text-mist-600'
                     }`}
                   >
@@ -208,7 +208,7 @@ export function ArchitectureDiagram() {
                     active ? 'border-accent-400/60 bg-accent-500/10 text-mist-100' : 'border-line bg-ink-800/60 text-mist-300'
                   }`}
                 >
-                  <Icon size={16} className={active ? 'text-accent-300' : 'text-mist-500'} />
+                  <Icon size={16} className={active ? 'text-accent-600' : 'text-mist-500'} />
                   {system}
                 </div>
               );

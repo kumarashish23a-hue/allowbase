@@ -19,7 +19,7 @@ export function Problem() {
           return (
             <Reveal key={problem.title} delay={index * 0.08}>
               <div className="h-full rounded-xl border border-line bg-ink-900/60 p-6 shadow-card transition hover:border-line-strong">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-ink-800 text-accent-300">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-ink-800 text-accent-600">
                   <Icon size={18} />
                 </span>
                 <h3 className="mt-5 text-base font-semibold text-mist-100">{problem.title}</h3>

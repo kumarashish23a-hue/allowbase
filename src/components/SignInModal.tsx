@@ -98,7 +98,7 @@ export function SignInModal({ open, onClose, onAuthSuccess }: SignInModalProps) 
                 setNotice(null);
               }}
               className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                mode === item ? 'bg-accent-500/20 text-accent-200' : 'text-mist-500 hover:text-mist-200'
+                mode === item ? 'bg-accent-500/20 text-accent-600' : 'text-mist-500 hover:text-mist-200'
               }`}
             >
               {item === 'signin' ? 'Sign in' : 'Create account'}

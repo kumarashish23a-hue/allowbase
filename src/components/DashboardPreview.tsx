@@ -18,7 +18,7 @@ export function DashboardPreview() {
     <div className="overflow-hidden rounded-xl border border-line bg-ink-900/80 shadow-card">
       <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
         <div className="flex items-center gap-2.5">
-          <Activity size={15} className="text-accent-300" />
+          <Activity size={15} className="text-accent-600" />
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-mist-200">Data Control Plane</p>
         </div>
         <span className="rounded-md border border-line bg-ink-800 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-mist-500">

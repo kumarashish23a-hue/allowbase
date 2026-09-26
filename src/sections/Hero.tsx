@@ -13,7 +13,7 @@ export function Hero() {
       <CursorGlow />
       <div className="relative mx-auto max-w-7xl px-4 pb-16 pt-16 sm:px-6 sm:pt-20 lg:px-8 lg:pb-24 lg:pt-24">
         <Reveal className="mx-auto max-w-4xl text-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-line bg-ink-900/70 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-300">
+          <span className="inline-flex items-center gap-2 rounded-full border border-line bg-ink-900/70 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-600">
             AI Data Infrastructure
           </span>
           <h1 className="mt-6 text-4xl font-bold tracking-tight text-mist-100 sm:text-5xl lg:text-[4.25rem] lg:leading-[1.04]">

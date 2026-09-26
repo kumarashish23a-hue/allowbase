@@ -45,7 +45,7 @@ export function Navbar({ onSignIn, onProfile }: NavbarProps) {
       className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-mist-200 transition hover:text-mist-100"
       aria-label="Open your profile"
     >
-      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent-500/20 text-xs font-bold text-accent-200">
+      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent-500/20 text-xs font-bold text-accent-600">
         {initial}
       </span>
       <span className="max-w-40 truncate">Account</span>
@@ -63,13 +63,13 @@ export function Navbar({ onSignIn, onProfile }: NavbarProps) {
   return (
     <header
       className={`fixed inset-x-0 top-0 z-[80] transition-all duration-300 ${
-        scrolled ? 'border-b border-line bg-[#0b1017]/90 backdrop-blur-md' : 'border-b border-transparent bg-transparent'
+        scrolled ? 'border-b border-line bg-white/85 backdrop-blur-md' : 'border-b border-transparent bg-transparent'
       }`}
     >
       <nav aria-label="Primary" className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <a href="#top" className="flex items-center gap-2.5">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-ink-800">
-            <ShieldCheck size={16} className="text-accent-300" />
+            <ShieldCheck size={16} className="text-accent-600" />
           </span>
           <span className="text-[12px] font-bold uppercase tracking-[0.16em] text-mist-100">
             Data Control Plane
@@ -116,7 +116,7 @@ export function Navbar({ onSignIn, onProfile }: NavbarProps) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.22 }}
-            className="border-t border-line bg-[#0b1017]/95 px-4 pb-6 pt-4 backdrop-blur-md lg:hidden"
+            className="border-t border-line bg-white/95 px-4 pb-6 pt-4 backdrop-blur-md lg:hidden"
           >
             <div className="flex flex-col gap-1">
               {navItems.map((item) => (
@@ -140,7 +140,7 @@ export function Navbar({ onSignIn, onProfile }: NavbarProps) {
                   }}
                   className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-line px-4 py-3 text-sm font-medium text-mist-200"
                 >
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent-500/20 text-[11px] font-bold text-accent-200">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent-500/20 text-[11px] font-bold text-accent-600">
                     {initial}
                   </span>
                   Account

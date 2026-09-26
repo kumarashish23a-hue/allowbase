@@ -7,7 +7,7 @@ import { decideApproval, listApprovals, type ApprovalItem } from '../services/ap
 import { getMyOrganizationRole } from '../services/organizationService';
 
 const statusTone: Record<string, string> = {
-  pending: 'border-accent-400/30 bg-accent-400/10 text-accent-300',
+  pending: 'border-accent-400/30 bg-accent-400/10 text-accent-600',
   approved: 'border-mint-400/30 bg-mint-400/10 text-mint-400',
   rejected: 'border-rose-400/30 bg-rose-400/10 text-rose-400',
   expired: 'border-line text-mist-500',
@@ -115,7 +115,7 @@ export function Approvals() {
             <div className="space-y-10">
               <div>
                 <div className="flex items-center gap-2">
-                  <Clock3 size={15} className="text-accent-300" />
+                  <Clock3 size={15} className="text-accent-600" />
                   <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-mist-400">
                     Pending ({pending.length})
                   </h3>

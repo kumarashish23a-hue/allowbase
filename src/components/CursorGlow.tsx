@@ -84,7 +84,7 @@ export function CursorGlow({ className = '' }: { className?: string }) {
           marginLeft: -280,
           marginTop: -280,
           background:
-            'radial-gradient(circle, rgba(34,211,238,0.12) 0%, rgba(34,211,238,0.04) 40%, transparent 65%)',
+            'radial-gradient(circle, rgba(34,211,238,0.2) 0%, rgba(34,211,238,0.07) 40%, transparent 65%)',
         }}
       />
     </div>

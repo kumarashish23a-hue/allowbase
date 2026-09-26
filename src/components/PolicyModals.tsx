@@ -164,7 +164,7 @@ export function CreatePolicyModal({ open, onClose, onCreate }: CreatePolicyModal
                 aria-pressed={effect === option}
                 className={`rounded-xl border px-3 py-2.5 text-xs font-bold tracking-[0.12em] transition ${
                   effect === option
-                    ? 'border-accent-400/60 bg-accent-500/15 text-accent-200'
+                    ? 'border-accent-400/60 bg-accent-500/15 text-accent-600'
                     : 'border-line text-mist-400 hover:text-mist-100'
                 }`}
               >

@@ -76,7 +76,7 @@ export function PolicyEngine() {
                 {policy.conditions.map((condition, conditionIndex) => (
                   <div key={`${condition.field}-${conditionIndex}`} className="flex items-center gap-2">
                     {conditionIndex > 0 ? (
-                      <span className="text-[11px] font-bold text-accent-300">AND</span>
+                      <span className="text-[11px] font-bold text-accent-600">AND</span>
                     ) : null}
                     <span className="rounded-lg border border-line bg-ink-950/70 px-2.5 py-1.5 text-xs text-mist-200">
                       {condition.field} {condition.operator} {condition.value}
