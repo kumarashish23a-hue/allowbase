@@ -1,16 +1,15 @@
 import { ArrowRight, Play } from 'lucide-react';
 import { ArchitectureDiagram } from '../components/ArchitectureDiagram';
-import { CursorGlow } from '../components/CursorGlow';
 import { DashboardPreview } from '../components/DashboardPreview';
 import { Reveal } from '../components/Reveal';
+import { VantaNet } from '../components/VantaNet';
 
 const stackCategories = ['LLMs', 'AI Agents', 'Databases', 'Data Warehouses', 'Internal AI', 'APIs'];
 
 export function Hero() {
   return (
     <section id="top" className="relative overflow-hidden pt-14">
-      <div className="bg-blueprint-grid pointer-events-none absolute inset-0" aria-hidden="true" />
-      <CursorGlow />
+      <VantaNet />
       <div className="relative mx-auto max-w-7xl px-4 pb-16 pt-16 sm:px-6 sm:pt-20 lg:px-8 lg:pb-24 lg:pt-24">
         <Reveal className="mx-auto max-w-4xl text-center">
           <span className="inline-flex items-center gap-2 rounded-full border border-line bg-ink-900/70 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-accent-600">
