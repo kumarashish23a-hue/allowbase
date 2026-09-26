@@ -29,10 +29,21 @@ export function VantaNet({ className = '' }: { className?: string }) {
 
     (async () => {
       try {
-        const [{ default: NET }, THREE] = await Promise.all([
+        const [vantaMod, THREE] = await Promise.all([
           import('vanta/dist/vanta.net.min'),
           import('three'),
         ]);
+        // The UMD build's export shape varies by bundler interop: the factory
+        // may sit at mod.default or one level deeper at mod.default.default.
+        const exported = (vantaMod as unknown as { default?: unknown }).default as
+          | ((opts: Record<string, unknown>) => VantaNetInstance)
+          | { default?: (opts: Record<string, unknown>) => VantaNetInstance }
+          | undefined;
+        const NET =
+          typeof exported === 'function' ? exported : exported?.default;
+        if (typeof NET !== 'function') {
+          throw new Error('Vanta NET factory not found in module exports');
+        }
         if (cancelled || vantaRef.current || !hostRef.current) return;
         vantaRef.current = NET({
           el: hostRef.current,
