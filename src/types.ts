@@ -96,6 +96,12 @@ export interface DataSource {
   sensitiveAssets: string;
   lastScan: string;
   risk: RiskLevel;
+  /** Present for sources loaded from the backend. */
+  sourceType?: string;
+  /** True for a real connected PostgreSQL source (vs the landing-page mock). */
+  isLive?: boolean;
+  /** Number of discovered tables, for live PostgreSQL sources. */
+  tableCount?: number | null;
 }
 
 export interface SecurityFeature {

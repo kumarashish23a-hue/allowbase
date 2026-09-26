@@ -148,12 +148,15 @@ Environment: exactly two public variables — `VITE_SUPABASE_URL`, `VITE_SUPABAS
 4. Each discovered object becomes a `data_assets` row: name, location, type, owner, tags — **metadata only, never row contents**.
 5. New/changed assets raise events → classification → policy review → alerts.
 
-### What exists today
+### What exists today (updated: Phase 2, 2026-09-26)
 
-- `data_sources` table: `{ name, type, status, config (jsonb), record_count }`. A source is a **label** the user types in; `config` is free-form JSON.
-- `data_assets` table: `{ name, type, location, classification, sensitivity_level, owner, tags, purpose }`. Assets are created manually or by the starter kit.
-- **No connector code, no OAuth, no scanner, no background worker, no `record_count` updater.** The "MOCK" badges on the DataSources section are honest: Google Drive / GitHub / Postgres / Slack / Notion / S3 / CRM are names with invented counts.
-- `sensitive_data_findings` table exists (the *result* slot for a scanner) but nothing writes to it automatically — the starter kit inserts one illustrative row.
+- `data_sources` table: `{ name, type, status, metadata (jsonb), last_scan_at }`. `type = 'postgresql'` and `status = 'connected'` are real states now, not just labels.
+- **Real PostgreSQL connector** — two Edge Functions, no new migrations needed:
+  - `connect-postgres`: validates JWT + owner/admin/security role, tests the connection over TLS (15s timeout), saves **only** non-secret config (`host, port, database, username`) in `data_sources.metadata`. The password is used once, in memory, never stored/logged/returned.
+  - `discover-postgres`: takes `{ source_id, password }`, sets the session read-only (`default_transaction_read_only = on`), reads `information_schema.tables` + `information_schema.columns` (+ best-effort `pg_stat_user_tables` row estimates), and upserts one `data_assets` row per table (`asset_type = 'table'`, columns in `metadata`, `last_scanned_at` updated). Re-discovery **preserves** user-set `classification` / `sensitivity_level`. No row data is ever selected or persisted.
+- The Data Sources section shows **Live** badges for connected databases, with per-source **Discover** (password per run, never stored) and **View catalog** (expandable table → column browser). Everything else keeps its honest **Mock** badge.
+- Verified with `scripts/verify-discovery.mjs`: the exact discovery queries run against in-memory Postgres — tables, views, column mapping, system-schema exclusion, and row estimates all asserted.
+- Still missing: OAuth connectors (Drive/GitHub/Slack/…), background/scheduled discovery workers, automatic classification of discovered columns (deterministic rules — the planned Phase 2b), and `sensitive_data_findings` writers.
 
 ### The metadata-vs-data rule (architectural principle)
 
