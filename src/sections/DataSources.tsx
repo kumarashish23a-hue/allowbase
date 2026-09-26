@@ -425,6 +425,9 @@ export function DataSources() {
           <p className="text-xs text-mist-500">
             Use a read-only database user. Only table and column names are ever read — no row data leaves your database.
           </p>
+          <p className="text-xs text-mist-500">
+            The first run after deploying can take up to a minute while the server warms up. Please wait.
+          </p>
           {connectError ? <p className="text-sm text-rose-400">{connectError}</p> : null}
           {connectSuccess ? <p className="text-sm text-mint-400">{connectSuccess}</p> : null}
           <button type="submit" disabled={connecting} className={primaryButtonClass}>
@@ -454,6 +457,9 @@ export function DataSources() {
             />
           </div>
           {discoverError ? <p className="text-sm text-rose-400">{discoverError}</p> : null}
+          <p className="text-xs text-mist-500">
+            The first run after deploying can take up to a minute while the server warms up. Please wait.
+          </p>
           {discoverResult ? (
             <div className="rounded-xl border border-mint-400/30 bg-mint-400/10 px-4 py-3 text-sm text-mint-300">
               Discovered {discoverResult.tables} tables and {discoverResult.columns} columns —{' '}
