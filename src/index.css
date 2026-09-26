@@ -1,28 +1,28 @@
 @import "tailwindcss";
 
 @theme {
-  --color-ink-950: #05070c;
-  --color-ink-900: #090d16;
-  --color-ink-850: #0b111e;
-  --color-ink-800: #0e1526;
-  --color-ink-700: #152033;
-  --color-ink-600: #1e2c47;
+  --color-ink-950: #0a0805;
+  --color-ink-900: #0f0b06;
+  --color-ink-850: #14100a;
+  --color-ink-800: #1a140c;
+  --color-ink-700: #231a10;
+  --color-ink-600: #2f2417;
 
-  --color-line: rgba(148, 163, 184, 0.16);
-  --color-line-strong: rgba(148, 163, 184, 0.28);
+  --color-line: rgba(216, 178, 132, 0.16);
+  --color-line-strong: rgba(216, 178, 132, 0.28);
 
-  --color-mist-100: #eef2fb;
-  --color-mist-200: #dbe4f5;
-  --color-mist-300: #bcc9e4;
-  --color-mist-400: #98a7c7;
-  --color-mist-500: #7b8aa9;
-  --color-mist-600: #5b6a8c;
+  --color-mist-100: #faf5ea;
+  --color-mist-200: #f0e7d3;
+  --color-mist-300: #ddd0b6;
+  --color-mist-400: #b8a888;
+  --color-mist-500: #94856a;
+  --color-mist-600: #6e6350;
 
-  --color-accent-200: #c3d3ff;
-  --color-accent-300: #9db8ff;
-  --color-accent-400: #7aa2ff;
-  --color-accent-500: #4f7cff;
-  --color-accent-600: #2f5fe0;
+  --color-accent-200: #ffd9a8;
+  --color-accent-300: #ffbd76;
+  --color-accent-400: #f59e4c;
+  --color-accent-500: #dd7d26;
+  --color-accent-600: #b25f16;
 
   --color-mint-400: #5fd0a5;
   --color-amber-400: #e8b45a;
@@ -71,9 +71,9 @@ html {
 
 body {
   background:
-    radial-gradient(1200px 620px at 50% -8%, rgba(79, 124, 255, 0.16), transparent 62%),
+    radial-gradient(1200px 620px at 50% -8%, rgba(221, 125, 38, 0.16), transparent 62%),
     radial-gradient(900px 520px at 88% 18%, rgba(95, 208, 165, 0.07), transparent 60%),
-    radial-gradient(760px 620px at 8% 32%, rgba(47, 95, 224, 0.08), transparent 62%),
+    radial-gradient(760px 620px at 8% 32%, rgba(178, 95, 22, 0.1), transparent 62%),
     var(--color-ink-950);
   color: var(--color-mist-100);
   font-family: var(--font-sans);
@@ -82,12 +82,12 @@ body {
 }
 
 ::selection {
-  background: rgba(79, 124, 255, 0.34);
+  background: rgba(221, 125, 38, 0.34);
   color: #fff;
 }
 
 :focus-visible {
-  outline: 2px solid rgba(122, 162, 255, 0.85);
+  outline: 2px solid rgba(245, 158, 76, 0.85);
   outline-offset: 3px;
   border-radius: 6px;
 }

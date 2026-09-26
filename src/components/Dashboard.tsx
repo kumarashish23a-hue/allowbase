@@ -41,7 +41,7 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
       {label ? <p className="mb-1 font-semibold text-mist-200">{label}</p> : null}
       {payload.map((entry, index) => (
         <p key={`${entry.name ?? 'value'}-${index}`} className="text-mist-400">
-          <span style={{ color: entry.color ?? '#9db8ff' }}>●</span> {entry.name}:{' '}
+          <span style={{ color: entry.color ?? '#ffbd76' }}>●</span> {entry.name}:{' '}
           <span className="text-mist-100">{entry.value}</span>
         </p>
       ))}
@@ -158,15 +158,15 @@ export function Dashboard() {
                 <AreaChart data={series} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
                   <defs>
                     <linearGradient id="requestsGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#7aa2ff" stopOpacity={0.45} />
-                      <stop offset="100%" stopColor="#7aa2ff" stopOpacity={0.02} />
+                      <stop offset="0%" stopColor="#f59e4c" stopOpacity={0.45} />
+                      <stop offset="100%" stopColor="#f59e4c" stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid stroke="rgba(148,163,184,0.12)" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fill: '#5b6a8c', fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: '#5b6a8c', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="label" tick={{ fill: '#6e6350', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: '#6e6350', fontSize: 11 }} axisLine={false} tickLine={false} />
                   <Tooltip content={<ChartTooltip />} />
-                  <Area type="monotone" dataKey="requests" name="Requests" stroke="#7aa2ff" strokeWidth={2} fill="url(#requestsGradient)" />
+                  <Area type="monotone" dataKey="requests" name="Requests" stroke="#f59e4c" strokeWidth={2} fill="url(#requestsGradient)" />
                   <Area type="monotone" dataKey="blocked" name="Blocked" stroke="#ef7d8f" strokeWidth={1.5} fill="transparent" strokeDasharray="5 5" />
                 </AreaChart>
               </ResponsiveContainer>
@@ -206,10 +206,10 @@ export function Dashboard() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={modelUsage} margin={{ top: 8, right: 8, bottom: 0, left: -8 }} layout="vertical">
                   <CartesianGrid stroke="rgba(148,163,184,0.12)" horizontal={false} />
-                  <XAxis type="number" tick={{ fill: '#5b6a8c', fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="model" width={118} tick={{ fill: '#98a7c7', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <XAxis type="number" tick={{ fill: '#6e6350', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="model" width={118} tick={{ fill: '#b8a888', fontSize: 11 }} axisLine={false} tickLine={false} />
                   <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(122,162,255,0.08)' }} />
-                  <Bar dataKey="requests" name="Requests" fill="#4f7cff" radius={[6, 6, 6, 6]} barSize={18} />
+                  <Bar dataKey="requests" name="Requests" fill="#dd7d26" radius={[6, 6, 6, 6]} barSize={18} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -221,8 +221,8 @@ export function Dashboard() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={sourceUsage} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
                   <CartesianGrid stroke="rgba(148,163,184,0.12)" vertical={false} />
-                  <XAxis dataKey="source" tick={{ fill: '#5b6a8c', fontSize: 10 }} axisLine={false} tickLine={false} interval={0} angle={-18} dy={12} height={54} />
-                  <YAxis tick={{ fill: '#5b6a8c', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="source" tick={{ fill: '#6e6350', fontSize: 10 }} axisLine={false} tickLine={false} interval={0} angle={-18} dy={12} height={54} />
+                  <YAxis tick={{ fill: '#6e6350', fontSize: 11 }} axisLine={false} tickLine={false} />
                   <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(122,162,255,0.08)' }} />
                   <Bar dataKey="requests" name="Requests" fill="#5fd0a5" radius={[6, 6, 0, 0]} barSize={22} />
                 </BarChart>

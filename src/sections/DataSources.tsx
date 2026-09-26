@@ -25,7 +25,7 @@ const riskTone: Record<DataSource['risk'], string> = {
 };
 
 const classificationTone: Record<string, string> = {
-  public: 'text-sky-300 border-sky-400/30 bg-sky-400/10',
+  public: 'text-accent-300 border-accent-400/30 bg-accent-400/10',
   internal: 'text-mist-300 border-line bg-ink-950/70',
   confidential: 'text-amber-300 border-amber-400/30 bg-amber-400/10',
   restricted: 'text-rose-300 border-rose-400/30 bg-rose-400/10',
@@ -35,7 +35,7 @@ const severityTone: Record<string, string> = {
   critical: 'text-rose-300 border-rose-400/30 bg-rose-400/10',
   high: 'text-amber-300 border-amber-400/30 bg-amber-400/10',
   medium: 'text-mist-300 border-line bg-ink-950/70',
-  low: 'text-sky-300 border-sky-400/30 bg-sky-400/10',
+  low: 'text-accent-300 border-accent-400/30 bg-accent-400/10',
 };
 
 const CLASSIFICATION_OPTIONS = ['public', 'internal', 'confidential', 'restricted'];
