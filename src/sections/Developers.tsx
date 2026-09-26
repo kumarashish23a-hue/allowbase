@@ -49,7 +49,7 @@ export function Developers() {
       <SectionHeading
         eyebrow="Developers"
         title="Built to fit your existing AI stack."
-        description="Drop a policy check in front of any model call. The API below is a visual demo — no real endpoint exists."
+        description="Drop a policy check in front of any model call. The endpoint below is live — create an API key in the section under this one and call it from your backend."
       />
 
       <div className="mt-12 grid gap-6 lg:grid-cols-[1fr_1.2fr]">
@@ -83,7 +83,11 @@ export function Developers() {
           <div className="space-y-4">
             <CodeBlock title="Request" code={developerRequest} id="request example" />
             <CodeBlock title="Response" code={developerResponse} id="response example" />
-            <p className="text-xs text-mist-600">Demo only. Do not implement a real API from this example.</p>
+            <p className="text-xs text-mist-600">
+              Live endpoint. Check-mode: only call the model when <span className="font-mono">decision</span> is{' '}
+              <span className="font-mono">allow</span>; treat <span className="font-mono">require_approval</span> as a
+              pause for a human. <a href="#api-keys" className="underline hover:text-mist-400">Get an API key</a>.
+            </p>
           </div>
         </Reveal>
       </div>

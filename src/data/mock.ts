@@ -354,17 +354,30 @@ export const simulationSteps: SimulationStep[] = [
   { id: 'destination', label: 'Evaluating destination', detail: 'Checking whether the AI system is internal or external.' },
 ];
 
-export const developerRequest = `POST /v1/ai/request
+export const developerRequest = `POST /functions/v1/ingest-event
+x-api-key: dcp_live_...
 
 {
-  "model": "example-model",
+  "event_id": "evt_9f32c1",
+  "model_name": "support-copilot",
   "purpose": "customer-support",
-  "data": "customer-record"
+  "data_asset_ids": ["<asset-uuid>"],
+  "agent_name": "triage-bot"
 }`;
 
 export const developerResponse = `{
-  "decision": "ALLOW",
-  "risk": "LOW",
-  "policy": "internal-support-data",
-  "audit_id": "audit_9f32c1"
+  "request_id": "88d025e7-a65e-4598-a84c-96d2c7893619",
+  "decision": "allow",
+  "risk": "low",
+  "reasons": [],
+  "policies_triggered": [],
+  "checks": {
+    "identity": true,
+    "permission": true,
+    "data_classification": true,
+    "ai_destination": true,
+    "purpose": true
+  },
+  "event_id": "evt_9f32c1",
+  "idempotent_replay": false
 }`;

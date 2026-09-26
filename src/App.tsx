@@ -3,6 +3,7 @@ import { Navbar } from './components/Navbar';
 import { Agents } from './sections/Agents';
 import { AIRequest } from './sections/AIRequest';
 import { Approvals } from './sections/Approvals';
+import { ApiKeys } from './sections/ApiKeys';
 import { DataSources } from './sections/DataSources';
 import { Developers } from './sections/Developers';
 import { Faq } from './sections/Faq';
@@ -83,6 +84,7 @@ function App() {
         <DataSources />
         <Security />
         <Developers />
+        <ApiKeys />
         <UseCases />
         <Pricing onDemo={openSimulator} />
         <Faq />
