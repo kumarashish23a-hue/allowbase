@@ -39,7 +39,7 @@ async function loadLive(range: Range): Promise<DashboardData> {
     supabase.rpc('get_source_usage', { p_organization_id: orgId }),
   ]);
   const firstError = [metricsRes, seriesRes, riskRes, modelsRes, sourcesRes].find((res) => res.error);
-  if (firstError?.error) throw new Error('Could not load dashboard metrics.');
+  if (firstError?.error) throw new Error(`Could not load dashboard metrics: ${firstError.error.message}`);
 
   const m = metricsRes.data as {
     total_requests: number;
@@ -103,15 +103,19 @@ async function loadLive(range: Range): Promise<DashboardData> {
 }
 
 /**
- * Dashboard data. Uses Supabase RPC aggregates when configured and signed in,
- * so the browser never fetches every record; otherwise mock data.
+ * Dashboard data. Uses Supabase RPC aggregates when the user is signed in with
+ * a workspace — backend failures surface as explicit errors, never silent mock
+ * data. Signed-out visitors get the simulated landing-page preview.
  */
 export async function getDashboard(range: Range): Promise<DashboardData> {
   if (isSupabaseConfigured()) {
-    try {
+    const supabase = getSupabase();
+    const {
+      data: { session },
+    } = await supabase!.auth.getSession();
+    const orgId = await getActiveOrganizationId();
+    if (session && orgId) {
       return await loadLive(range);
-    } catch {
-      // Fall through to mock data below.
     }
   }
   return {

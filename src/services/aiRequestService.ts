@@ -9,6 +9,8 @@ export interface EvaluateInput {
   ai: string;
   data: string;
   purpose: string;
+  /** Optional AI agent name; the request is attributed to the agent and its data permissions are enforced. */
+  agent?: string;
 }
 
 const decisionMap: Record<EvaluationResult['decision'], MockEvaluation['decision']> = {
@@ -23,6 +25,8 @@ function toMockEvaluation(result: EvaluationResult): MockEvaluation {
     reason: result.reasons.join(' ') || 'Evaluated by the Data Control Plane policy engine.',
     detected: [],
     policy: result.policies_triggered[0] ?? 'Default policy',
+    approvalRequired: result.approval_required ?? false,
+    approvalRequestId: result.approval_request_id ?? null,
   };
 }
 
@@ -40,35 +44,68 @@ async function findModelId(label: string): Promise<string | null> {
   return match?.id ?? null;
 }
 
+async function findAgentId(label: string | undefined): Promise<string | null> {
+  if (!label || !label.trim()) return null;
+  const supabase = getSupabase();
+  const orgId = await getActiveOrganizationId();
+  if (!supabase || !orgId) return null;
+  const { data, error } = await supabase.from('ai_agents').select('id,name').eq('organization_id', orgId);
+  if (error || !data) return null;
+  const normalized = label.trim().toLowerCase();
+  const match = (data as { id: string; name: string }[]).find(
+    (agent) =>
+      normalized.includes(agent.name.toLowerCase()) || agent.name.toLowerCase().includes(normalized),
+  );
+  return match?.id ?? null;
+}
+
 /**
- * Evaluate an AI request. Uses the Supabase Edge Function (which calls the
- * secure evaluate_ai_request Postgres function) when the app is configured
- * and the user is signed in; otherwise falls back to the local mock engine.
+ * Evaluate an AI request. When the app is configured and the user is signed in
+ * with a workspace, the request is evaluated by the Supabase Edge Function
+ * (which calls the secure evaluate_ai_request Postgres function) and any
+ * failure surfaces as an explicit error — it is never silently simulated.
+ * Signed-out visitors get the local mock engine for the landing-page demo.
  */
 export async function evaluateRequest(input: EvaluateInput): Promise<MockEvaluation> {
   const supabase = getSupabase();
   const orgId = await getActiveOrganizationId();
   if (supabase && orgId) {
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) return evaluateMockRequest(input);
-      const [modelId, asset] = await Promise.all([findModelId(input.ai), findAssetByLabel(input.data)]);
-      if (modelId && asset) {
-        const { data, error } = await supabase.functions.invoke<EvaluationResult>('evaluate-ai-request', {
-          body: {
-            organization_id: orgId,
-            ai_model_id: modelId,
-            purpose: input.purpose,
-            data_asset_ids: [asset.id],
-          },
-        });
-        if (!error && data) return toMockEvaluation(data);
-      }
-    } catch {
-      // Fall through to the mock engine below.
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) return evaluateMockRequest(input);
+
+    const [modelId, asset, agentId] = await Promise.all([
+      findModelId(input.ai),
+      findAssetByLabel(input.data),
+      findAgentId(input.agent),
+    ]);
+    if (!modelId || !asset) {
+      throw new Error(
+        'No matching AI model or data asset in your workspace. Open Account → Complete workspace setup and load the starter workspace, then try again.',
+      );
     }
+    if (input.agent?.trim() && !agentId) {
+      throw new Error(
+        `No AI agent named "${input.agent.trim()}" in your workspace. Leave the agent field empty or use an existing agent name.`,
+      );
+    }
+    const { data, error } = await supabase.functions.invoke<EvaluationResult>('evaluate-ai-request', {
+      body: {
+        organization_id: orgId,
+        ai_model_id: modelId,
+        purpose: input.purpose,
+        data_asset_ids: [asset.id],
+        agent_id: agentId,
+      },
+    });
+    if (error) {
+      throw new Error(
+        `Evaluation failed: ${error.message || 'the evaluation service did not respond'}. Check Account → Complete workspace setup to deploy it.`,
+      );
+    }
+    if (!data) throw new Error('Evaluation failed: the service returned no result.');
+    return toMockEvaluation(data);
   }
   return evaluateMockRequest(input);
 }

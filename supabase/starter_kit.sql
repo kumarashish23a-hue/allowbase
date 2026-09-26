@@ -6,11 +6,17 @@
 -- is never duplicated or modified.
 --
 -- What it creates per empty organization:
---   2 data sources, 2 data assets, 2 AI models, 1 agent, 2 policies,
---   1 sensitive-data finding.
+--   2 data sources, 2 data assets, 2 AI models, 1 agent, 3 policies,
+--   1 agent data grant, 1 sensitive-data finding.
 -- The names match the request simulator presets, so after running this
 -- (and deploying the evaluate-ai-request Edge Function) the simulator
 -- performs REAL policy evaluations stored in your database.
+--
+-- Try these in the simulator after loading:
+--   Claude + Customer Database                    -> BLOCK (PII policy)
+--   Internal Support Agent + Product Documentation -> ALLOW
+--   Claude + Product Documentation                -> PENDING APPROVAL
+--   Claude + Customer Database as Customer Support Agent -> BLOCK (no grant)
 
 -- 1. Data sources ------------------------------------------------------------
 insert into public.data_sources (id, organization_id, name, type, status, description, last_scan_at, metadata)
@@ -54,6 +60,19 @@ select gen_random_uuid(), o.id,
 from public.organizations o
 where not exists (select 1 from public.ai_agents a where a.organization_id = o.id);
 
+-- 4b. Starter agent data permission ------------------------------------------------
+-- The starter agent may read Product Documentation and nothing else.
+-- Requests attributed to it without a grant are denied by default.
+insert into public.ai_agent_data_permissions (id, agent_id, data_source_id, data_asset_id, permission_type)
+select gen_random_uuid(), a.id, null, d.id, 'read'
+from public.organizations o
+join public.ai_agents a on a.organization_id = o.id and a.name = 'Customer Support Agent'
+join public.data_assets d on d.organization_id = o.id and d.name = 'Product Documentation'
+where not exists (
+  select 1 from public.ai_agent_data_permissions p
+  where p.agent_id = a.id and p.data_asset_id = d.id and p.permission_type = 'read'
+);
+
 -- 5. Policies -------------------------------------------------------------------
 insert into public.policies (id, organization_id, name, description, status, priority, rule, action, created_by)
 select gen_random_uuid(), o.id, p.name, p.description, 'active', p.priority, p.rule::jsonb, p.action, null
@@ -68,7 +87,12 @@ cross join (values
    'Approved internal models may access internal data.',
    50,
    '{"conditions": [{"field": "ai.is_approved", "operator": "equals", "value": true}, {"field": "ai.is_external", "operator": "equals", "value": false}]}',
-   'allow')
+   'allow'),
+  ('External Docs Need Approval',
+   'External AI reading internal documents needs a human approval.',
+   20,
+   '{"conditions": [{"field": "ai.is_external", "operator": "equals", "value": true}, {"field": "data.classification", "operator": "equals", "value": "internal"}]}',
+   'require_approval')
 ) as p(name, description, priority, rule, action)
 where not exists (select 1 from public.policies x where x.organization_id = o.id);
 

@@ -75,3 +75,59 @@ export async function setAgentStatus(id: string, status: 'active' | 'paused'): P
   const { error } = await supabase.from('ai_agents').update({ status }).eq('id', id);
   if (error) throw new Error('Could not update the agent.');
 }
+
+/** agent_id -> data_asset_id[] of direct read grants, for the active organization. */
+export async function getAgentAssetGrants(): Promise<Record<string, string[]>> {
+  const supabase = getSupabase();
+  const orgId = await getActiveOrganizationId();
+  if (!supabase || !orgId) return {};
+  const { data, error } = await supabase
+    .from('ai_agent_data_permissions')
+    .select('agent_id, data_asset_id, agent:ai_agents!inner(organization_id)')
+    .eq('agent.organization_id', orgId)
+    .eq('permission_type', 'read')
+    .not('data_asset_id', 'is', null);
+  if (error) throw new Error('Could not load agent permissions.');
+  const map: Record<string, string[]> = {};
+  for (const row of (data ?? []) as { agent_id: string; data_asset_id: string }[]) {
+    (map[row.agent_id] ??= []).push(row.data_asset_id);
+  }
+  return map;
+}
+
+/**
+ * Grant an agent read access to a data asset. Insert is idempotent; RLS
+ * requires an owner/admin/security role on the agent's organization.
+ */
+export async function grantAgentRead(agentId: string, assetId: string): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const { data: existing, error: lookupError } = await supabase
+    .from('ai_agent_data_permissions')
+    .select('id')
+    .eq('agent_id', agentId)
+    .eq('data_asset_id', assetId)
+    .eq('permission_type', 'read')
+    .is('data_source_id', null)
+    .limit(1);
+  if (lookupError) throw new Error('Could not grant access.');
+  if (existing && existing.length > 0) return;
+  const { error } = await supabase
+    .from('ai_agent_data_permissions')
+    .insert({ agent_id: agentId, data_asset_id: assetId, permission_type: 'read' });
+  if (error) throw new Error('Could not grant access.');
+}
+
+/** Revoke an agent's direct read grant on a data asset. RLS requires owner/admin. */
+export async function revokeAgentRead(agentId: string, assetId: string): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const { error } = await supabase
+    .from('ai_agent_data_permissions')
+    .delete()
+    .eq('agent_id', agentId)
+    .eq('data_asset_id', assetId)
+    .eq('permission_type', 'read')
+    .is('data_source_id', null);
+  if (error) throw new Error('Could not revoke access.');
+}

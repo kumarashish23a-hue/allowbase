@@ -12,18 +12,21 @@ interface RequestSimulatorProps {
 }
 
 const presets = [
-  { label: 'Risky request', user: 'Alex Kim', ai: 'Claude', data: 'Customer Database', purpose: 'Customer Analysis' },
-  { label: 'Safe request', user: 'Sarah Chen', ai: 'Internal Support Agent', data: 'Product Documentation', purpose: 'Customer Support' },
+  { label: 'Risky request', user: 'Alex Kim', ai: 'Claude', agent: '', data: 'Customer Database', purpose: 'Customer Analysis' },
+  { label: 'Safe request', user: 'Sarah Chen', ai: 'Internal Support Agent', agent: '', data: 'Product Documentation', purpose: 'Customer Support' },
+  { label: 'Unpermitted agent', user: 'Alex Kim', ai: 'Claude', agent: 'Customer Support Agent', data: 'Customer Database', purpose: 'Customer Analysis' },
 ];
 
 export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
   const [user, setUser] = useState('Alex Kim');
   const [ai, setAi] = useState('Claude');
+  const [agent, setAgent] = useState('');
   const [data, setData] = useState('Customer Database');
   const [purpose, setPurpose] = useState('Customer Analysis');
   const [running, setRunning] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [result, setResult] = useState<MockEvaluation | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const timers = useRef<number[]>([]);
 
   const clearTimers = () => {
@@ -36,6 +39,7 @@ export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
       setRunning(false);
       setStepIndex(0);
       setResult(null);
+      setError(null);
       clearTimers();
     }
     return clearTimers;
@@ -44,6 +48,7 @@ export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
   const evaluate = () => {
     clearTimers();
     setResult(null);
+    setError(null);
     setRunning(true);
     setStepIndex(0);
 
@@ -54,12 +59,13 @@ export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
           if (index === simulationSteps.length - 1) {
             timers.current.push(
               window.setTimeout(() => {
-                void evaluateRequest({ user, ai, data, purpose })
+                void evaluateRequest({ user, ai, agent, data, purpose })
                   .then((evaluation) => {
                     setResult(evaluation);
                   })
-                  .catch(() => {
+                  .catch((err: unknown) => {
                     setResult(null);
+                    setError(err instanceof Error ? err.message : 'Evaluation failed.');
                   })
                   .finally(() => {
                     setRunning(false);
@@ -72,8 +78,10 @@ export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
     });
   };
 
-  const decisionTone =
-    result?.decision === 'BLOCK'
+  const pendingApproval = result?.approvalRequired === true;
+  const decisionTone = pendingApproval
+    ? 'border-sky-400/30 bg-sky-400/10 text-sky-300'
+    : result?.decision === 'BLOCK'
       ? 'border-rose-400/30 bg-rose-400/10 text-rose-400'
       : result?.decision === 'REDACT'
         ? 'border-amber-400/30 bg-amber-400/10 text-amber-400'
@@ -101,9 +109,11 @@ export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
                 onClick={() => {
                   setUser(preset.user);
                   setAi(preset.ai);
+                  setAgent(preset.agent);
                   setData(preset.data);
                   setPurpose(preset.purpose);
                   setResult(null);
+                  setError(null);
                 }}
                 className="rounded-full border border-line px-3 py-1.5 text-xs font-medium text-mist-300 transition hover:border-line-strong hover:text-mist-100"
               >
@@ -114,10 +124,11 @@ export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
 
           <div className="mt-5 space-y-4">
             {[
-              { id: 'sim-user', label: 'User', value: user, setter: setUser },
-              { id: 'sim-ai', label: 'AI System', value: ai, setter: setAi },
-              { id: 'sim-data', label: 'Data', value: data, setter: setData },
-              { id: 'sim-purpose', label: 'Purpose', value: purpose, setter: setPurpose },
+              { id: 'sim-user', label: 'User', value: user, setter: setUser, placeholder: 'Enter user' },
+              { id: 'sim-ai', label: 'AI System', value: ai, setter: setAi, placeholder: 'Enter ai system' },
+              { id: 'sim-agent', label: 'AI Agent (optional)', value: agent, setter: setAgent, placeholder: 'Leave empty, or name an agent' },
+              { id: 'sim-data', label: 'Data', value: data, setter: setData, placeholder: 'Enter data' },
+              { id: 'sim-purpose', label: 'Purpose', value: purpose, setter: setPurpose, placeholder: 'Enter purpose' },
             ].map((field) => (
               <div key={field.id}>
                 <label htmlFor={field.id} className="text-xs font-semibold uppercase tracking-[0.16em] text-mist-500">
@@ -128,7 +139,7 @@ export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
                   value={field.value}
                   onChange={(event) => field.setter(event.target.value)}
                   className="mt-2 w-full rounded-xl border border-line bg-ink-950/70 px-3 py-2.5 text-sm text-mist-100 placeholder:text-mist-600 focus:border-accent-400/60 focus:outline-none"
-                  placeholder={`Enter ${field.label.toLowerCase()}`}
+                  placeholder={field.placeholder}
                 />
               </div>
             ))}
@@ -176,9 +187,14 @@ export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
             <div className="mt-6 rounded-xl border border-line bg-ink-900/70 p-4">
               <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold tracking-[0.14em] ${decisionTone}`}>
                 {result.decision === 'BLOCK' ? <ShieldAlert size={14} /> : <ShieldCheck size={14} />}
-                {result.decision === 'BLOCK' ? 'BLOCKED' : result.decision === 'REDACT' ? 'REDACTED' : 'ALLOWED'}
+                {pendingApproval ? 'PENDING APPROVAL' : result.decision === 'BLOCK' ? 'BLOCKED' : result.decision === 'REDACT' ? 'REDACTED' : 'ALLOWED'}
               </span>
               <p className="mt-3 text-sm text-mist-200">{result.reason}</p>
+              {pendingApproval ? (
+                <p className="mt-3 rounded-lg border border-sky-400/20 bg-sky-400/5 px-3 py-2 text-xs text-sky-200">
+                  A policy requires human approval. An owner or admin can allow or reject it in the Approvals section.
+                </p>
+              ) : null}
               <div className="mt-3">
                 <p className="text-xs uppercase tracking-[0.16em] text-mist-500">Detected</p>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -190,6 +206,11 @@ export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
                 </div>
               </div>
               <p className="mt-3 text-xs text-mist-500">Policy: {result.policy}</p>
+            </div>
+          ) : error ? (
+            <div className="mt-6 rounded-xl border border-rose-400/30 bg-rose-400/5 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-rose-400">Evaluation failed</p>
+              <p className="mt-2 text-sm text-mist-200">{error}</p>
             </div>
           ) : (
             <p className="mt-6 text-sm text-mist-600">Run an evaluation to see the simulated allow/block decision.</p>

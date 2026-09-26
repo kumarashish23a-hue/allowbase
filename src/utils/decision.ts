@@ -12,6 +12,9 @@ export interface MockEvaluation {
   reason: string;
   detected: string[];
   policy: string;
+  /** True when a policy sent the request to human approval instead of deciding. */
+  approvalRequired?: boolean;
+  approvalRequestId?: string | null;
 }
 
 const externalModels = ['gpt', 'claude', 'gemini', 'llama'];

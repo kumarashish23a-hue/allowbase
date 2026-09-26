@@ -111,7 +111,7 @@ await db.exec(`
     language sql stable as $$ select 'b0000000-0000-4000-8000-0000000000a2'::uuid $$;
   insert into public.organization_members (organization_id, user_id, role, status)
   values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'b0000000-0000-4000-8000-0000000000a2', 'admin', 'active')
-  on conflict (organization_id, user_id) do update set status = 'active';
+  on conflict (organization_id, user_id) do update set status = 'active', role = 'admin';
 `);
 
 const blocked = await db.query(
@@ -143,6 +143,111 @@ const overTime = await db.query(
   `select * from public.get_requests_over_time('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 3)`
 );
 console.log('requests over time rows:', overTime.rows.length);
+
+// --- 010 hardening tests -------------------------------------------------------
+const ORG = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const ADMIN = 'b0000000-0000-4000-8000-0000000000a2';
+const MEMBER = 'b0000000-0000-4000-8000-0000000000b3';
+const CLAUDE = 'f0000000-0000-4000-8000-000000000002';
+const INTERNAL_AI = 'f0000000-0000-4000-8000-000000000005';
+const CUSTOMERS = 'd0000000-0000-4000-8000-000000000001';
+const TICKETS = 'd0000000-0000-4000-8000-000000000002';
+const DOCS = 'd0000000-0000-4000-8000-000000000003';
+const AGENT1 = '10000000-0000-4000-8000-000000000001';
+const AGENT2 = '10000000-0000-4000-8000-000000000002';
+
+function expect(cond, label) {
+  console.log((cond ? 'ok   ' : 'FAIL ') + label);
+  if (!cond) process.exitCode = 1;
+}
+
+// 1. Agent without a grant -> hard block (default deny for agents).
+const agentBlocked = await db.query(
+  `select public.evaluate_ai_request('${ORG}','${CLAUDE}','Support triage',array['${CUSTOMERS}'::uuid],null,'${AGENT2}','agent_action') as r`
+);
+const ab = agentBlocked.rows[0].r;
+expect(
+  ab.decision === 'block' &&
+    ab.checks.permission === false &&
+    ab.policies_triggered.includes('Agent data permission check') &&
+    /no read permission/.test(ab.reasons.join(' ')),
+  'agent without grant is blocked'
+);
+
+// 2. Agent with a grant -> permission passes, policy still decides.
+const agentOk = await db.query(
+  `select public.evaluate_ai_request('${ORG}','${CLAUDE}','Docs lookup',array['${DOCS}'::uuid],null,'${AGENT1}','agent_action') as r`
+);
+const ao = agentOk.rows[0].r;
+expect(ao.decision === 'allow' && ao.checks.permission === true, 'agent with grant is evaluated normally');
+
+// 3. Cross-org asset id -> exception (fail closed).
+await db.exec(`
+  insert into public.organizations (id, name, slug)
+  values ('bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb', 'Other', 'other-x')
+  on conflict (id) do nothing;
+  insert into public.data_assets (id, organization_id, name, asset_type)
+  values ('e0000000-0000-4000-8000-000000000001', 'bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb', 'other_secret', 'table')
+  on conflict (id) do nothing;
+`);
+let crossOrgFailed = false;
+try {
+  await db.query(
+    `select public.evaluate_ai_request('${ORG}','${CLAUDE}','x',array['e0000000-0000-4000-8000-000000000001'::uuid])`
+  );
+} catch (error) {
+  crossOrgFailed = /not found in organization/.test(error.message);
+}
+expect(crossOrgFailed, 'cross-org asset id is rejected');
+
+// 4. require_approval policy -> pending_approval + approval row.
+await db.exec(`
+  insert into public.policies (organization_id, name, status, priority, rule, action)
+  values ('${ORG}', 'Medium data needs approval', 'active', 30,
+    '{"conditions": [{"field": "data.sensitivity_level", "operator": "equals", "value": "medium"}]}',
+    'require_approval')
+`);
+const appr = await db.query(
+  `select public.evaluate_ai_request('${ORG}','${INTERNAL_AI}','Ticket analysis',array['${TICKETS}'::uuid]) as r`
+);
+const ar = appr.rows[0].r;
+expect(
+  ar.decision === 'review' && ar.approval_required === true && ar.approval_request_id,
+  'require_approval opens a pending approval'
+);
+const reqStatus = await db.query(`select status from public.ai_requests where id = '${ar.request_id}'::uuid`);
+expect(reqStatus.rows[0].status === 'pending_approval', 'request status is pending_approval');
+const apprRow = await db.query(
+  `select status from public.approval_requests where id = '${ar.approval_request_id}'::uuid`
+);
+expect(apprRow.rows[0].status === 'pending', 'approval row is pending');
+
+// 5. Admin approves -> request allowed + audited.
+const decided = await db.query(
+  `select public.decide_approval('${ar.approval_request_id}'::uuid, 'approved', 'looks fine') as d`
+);
+expect(decided.rows[0].d.request_status === 'allowed', 'approval moves request to allowed');
+const auditRow = await db.query(`select count(*)::int as n from public.audit_logs where action = 'approval_approved'`);
+expect(auditRow.rows[0].n === 1, 'approval decision is audited');
+
+// 6. Non-admin member cannot decide approvals.
+await db.exec(`
+  insert into public.organization_members (organization_id, user_id, role, status)
+  values ('${ORG}', '${MEMBER}', 'viewer', 'active')
+  on conflict (organization_id, user_id) do update set role = 'viewer', status = 'active';
+  create or replace function auth.uid() returns uuid
+    language sql stable as $$ select '${MEMBER}'::uuid $$;
+`);
+const appr2 = await db.query(
+  `select public.evaluate_ai_request('${ORG}','${INTERNAL_AI}','More tickets',array['${TICKETS}'::uuid]) as r`
+);
+let memberDenied = false;
+try {
+  await db.query(`select public.decide_approval('${appr2.rows[0].r.approval_request_id}'::uuid, 'approved')`);
+} catch (error) {
+  memberDenied = /only organization owners or admins/.test(error.message);
+}
+expect(memberDenied, 'non-admin cannot decide approvals');
 
 await db.close();
 console.log('SQL verification passed.');

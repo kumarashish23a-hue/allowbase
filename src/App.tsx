@@ -2,6 +2,7 @@ import { lazy, Suspense, useState } from 'react';
 import { Navbar } from './components/Navbar';
 import { Agents } from './sections/Agents';
 import { AIRequest } from './sections/AIRequest';
+import { Approvals } from './sections/Approvals';
 import { DataSources } from './sections/DataSources';
 import { Developers } from './sections/Developers';
 import { Faq } from './sections/Faq';
@@ -73,6 +74,7 @@ function App() {
         <Platform />
         <AIRequest onSimulate={openSimulator} />
         <PolicyEngine />
+        <Approvals />
         <Agents />
         <DataSources />
         <Security />

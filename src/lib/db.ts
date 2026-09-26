@@ -159,4 +159,6 @@ export interface EvaluationResult {
   reasons: string[];
   policies_triggered: string[];
   checks: Record<string, boolean>;
+  approval_required: boolean;
+  approval_request_id: string | null;
 }

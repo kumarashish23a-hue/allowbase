@@ -52,20 +52,23 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
 export function Dashboard() {
   const [range, setRange] = useState<Range>('7d');
   const [data, setData] = useState<DashboardData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setError(null);
     getDashboard(range)
       .then((result) => {
         if (!cancelled) setData(result);
       })
-      .catch(() => {
-        if (!cancelled) setData(null);
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load the dashboard.');
       });
     return () => {
       cancelled = true;
     };
-  }, [range ]);
+  }, [range, retryCount]);
 
   const metrics = data?.metrics ?? [];
   const series = data?.series ?? [];
@@ -73,6 +76,31 @@ export function Dashboard() {
   const modelUsage = data?.modelUsage ?? [];
   const sourceUsage = data?.sourceUsage ?? [];
   const live = data?.live ?? false;
+
+  if (error) {
+    return (
+      <div className="rounded-3xl border border-rose-400/30 bg-ink-900/70 p-8 shadow-panel">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-400">Dashboard unavailable</p>
+        <h3 className="mt-2 text-xl font-semibold tracking-tight text-mist-100">Could not load live metrics</h3>
+        <p className="mt-2 max-w-xl text-sm text-mist-400">{error}</p>
+        <button
+          type="button"
+          onClick={() => setRetryCount((count) => count + 1)}
+          className="mt-5 rounded-xl border border-line bg-ink-950/60 px-4 py-2.5 text-sm font-semibold text-mist-100 transition hover:border-line-strong"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="rounded-3xl border border-line bg-ink-900/70 p-8 shadow-panel">
+        <p className="text-sm text-mist-500">Loading dashboard…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="overflow-hidden rounded-3xl border border-line bg-ink-900/70 shadow-panel">
