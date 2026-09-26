@@ -167,7 +167,7 @@ export function Dashboard() {
                   <YAxis tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} />
                   <Tooltip content={<ChartTooltip />} />
                   <Area type="monotone" dataKey="requests" name="Requests" stroke="#22d3ee" strokeWidth={2} fill="url(#requestsGradient)" />
-                  <Area type="monotone" dataKey="blocked" name="Blocked" stroke="#ef7d8f" strokeWidth={1.5} fill="transparent" strokeDasharray="5 5" />
+                  <Area type="monotone" dataKey="blocked" name="Blocked" stroke="#f87171" strokeWidth={1.5} fill="transparent" strokeDasharray="5 5" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -224,7 +224,7 @@ export function Dashboard() {
                   <XAxis dataKey="source" tick={{ fill: '#475569', fontSize: 10 }} axisLine={false} tickLine={false} interval={0} angle={-18} dy={12} height={54} />
                   <YAxis tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} />
                   <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(122,162,255,0.08)' }} />
-                  <Bar dataKey="requests" name="Requests" fill="#5fd0a5" radius={[6, 6, 0, 0]} barSize={22} />
+                  <Bar dataKey="requests" name="Requests" fill="#34d399" radius={[6, 6, 0, 0]} barSize={22} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
