@@ -25,7 +25,7 @@ export function AIRequest({ onSimulate }: AIRequestProps) {
         <div className="mt-12 grid gap-6 lg:grid-cols-2">
           {requestExamples.map((request, index) => (
             <Reveal key={request.id} delay={index * 0.08}>
-              <div className="flex h-full flex-col rounded-2xl border border-line bg-ink-950/60 p-6 shadow-card sm:p-8">
+              <div className="flex h-full flex-col rounded-xl border border-line bg-ink-950/60 p-6 shadow-card sm:p-8">
                 <div className="flex items-center justify-between gap-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-mist-500">
                     Simulated request
@@ -103,7 +103,7 @@ export function AIRequest({ onSimulate }: AIRequestProps) {
           <button
             type="button"
             onClick={onSimulate}
-            className="inline-flex items-center gap-2 rounded-xl bg-accent-500 px-6 py-3.5 text-sm font-semibold text-white shadow-card transition hover:bg-accent-400"
+            className="inline-flex items-center gap-2 rounded-xl bg-accent-500 px-6 py-3.5 text-sm font-semibold text-[#06202a] shadow-card transition hover:bg-accent-400"
           >
             <FlaskConical size={16} /> Simulate AI Request
           </button>

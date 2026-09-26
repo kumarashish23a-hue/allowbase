@@ -25,7 +25,7 @@ function CodeBlock({ title, code, id }: { title: string; code: string; id: strin
   };
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-line bg-ink-950/80">
+    <div className="overflow-hidden rounded-xl border border-line bg-ink-950/80">
       <div className="flex items-center justify-between border-b border-line px-4 py-3">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-mist-500">{title}</p>
         <button
@@ -54,7 +54,7 @@ export function Developers() {
 
       <div className="mt-12 grid gap-6 lg:grid-cols-[1fr_1.2fr]">
         <Reveal>
-          <div className="rounded-2xl border border-line bg-ink-900/60 p-6 shadow-card sm:p-8">
+          <div className="rounded-xl border border-line bg-ink-900/60 p-6 shadow-card sm:p-8">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-mist-500">Conceptual architecture</p>
             <div className="mt-6 space-y-0">
               {architecture.map((layer, index) => (

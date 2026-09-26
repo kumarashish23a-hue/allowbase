@@ -26,7 +26,7 @@ const toneClass: Record<string, string> = {
   warn: 'text-amber-400',
 };
 
-const riskColors = ['#34d399', '#e8b45a', '#f87171'];
+const riskColors = ['#34d399', '#f59e0b', '#f87171'];
 
 interface TooltipEntry {
   name?: string;
@@ -79,7 +79,7 @@ export function Dashboard() {
 
   if (error) {
     return (
-      <div className="rounded-3xl border border-rose-400/30 bg-ink-900/70 p-8 shadow-panel">
+      <div className="rounded-xl border border-rose-400/30 bg-ink-900/70 p-8 shadow-panel">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-400">Dashboard unavailable</p>
         <h3 className="mt-2 text-xl font-semibold tracking-tight text-mist-100">Could not load live metrics</h3>
         <p className="mt-2 max-w-xl text-sm text-mist-400">{error}</p>
@@ -96,14 +96,14 @@ export function Dashboard() {
 
   if (!data) {
     return (
-      <div className="rounded-3xl border border-line bg-ink-900/70 p-8 shadow-panel">
+      <div className="rounded-xl border border-line bg-ink-900/70 p-8 shadow-panel">
         <p className="text-sm text-mist-500">Loading dashboard…</p>
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-line bg-ink-900/70 shadow-panel">
+    <div className="overflow-hidden rounded-xl border border-line bg-ink-900/70 shadow-panel">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line px-6 py-5">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-mist-500">
@@ -138,7 +138,7 @@ export function Dashboard() {
 
       <div className="grid grid-cols-2 gap-3 p-6 sm:grid-cols-3 xl:grid-cols-6">
         {metrics.map((metric) => (
-          <div key={metric.label} className="rounded-2xl border border-line bg-ink-950/60 p-4">
+          <div key={metric.label} className="rounded-xl border border-line bg-ink-950/60 p-4">
             <p className="text-xs text-mist-500">{metric.label}</p>
             <p className="mt-2 text-2xl font-semibold tracking-tight text-mist-100">{metric.value}</p>
             <p className={`mt-1 text-xs ${toneClass[metric.tone]}`}>{metric.delta}</p>
@@ -148,7 +148,7 @@ export function Dashboard() {
 
       <div className="thin-scroll overflow-x-auto px-6 pb-6">
         <div className="grid min-w-[720px] gap-4 lg:grid-cols-3">
-          <div className="rounded-2xl border border-line bg-ink-950/60 p-5 lg:col-span-2">
+          <div className="rounded-xl border border-line bg-ink-950/60 p-5 lg:col-span-2">
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-semibold text-mist-200">AI requests over time</h4>
               <span className="text-xs text-mist-600">{range}</span>
@@ -173,7 +173,7 @@ export function Dashboard() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-line bg-ink-950/60 p-5">
+          <div className="rounded-xl border border-line bg-ink-950/60 p-5">
             <h4 className="text-sm font-semibold text-mist-200">Risk distribution</h4>
             <div className="mt-4 h-64">
               <ResponsiveContainer width="100%" height="100%">
@@ -200,7 +200,7 @@ export function Dashboard() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-line bg-ink-950/60 p-5 lg:col-span-2">
+          <div className="rounded-xl border border-line bg-ink-950/60 p-5 lg:col-span-2">
             <h4 className="text-sm font-semibold text-mist-200">AI model usage</h4>
             <div className="mt-4 h-64">
               <ResponsiveContainer width="100%" height="100%">
@@ -215,7 +215,7 @@ export function Dashboard() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-line bg-ink-950/60 p-5">
+          <div className="rounded-xl border border-line bg-ink-950/60 p-5">
             <h4 className="text-sm font-semibold text-mist-200">Data access by source</h4>
             <div className="mt-4 h-64">
               <ResponsiveContainer width="100%" height="100%">

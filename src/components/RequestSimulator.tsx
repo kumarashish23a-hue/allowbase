@@ -149,13 +149,13 @@ export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
             type="button"
             onClick={evaluate}
             disabled={running}
-            className="mt-6 w-full rounded-xl bg-accent-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-6 w-full rounded-xl bg-accent-500 px-4 py-3 text-sm font-semibold text-[#06202a] transition hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {running ? 'Evaluating…' : 'Evaluate request'}
           </button>
         </div>
 
-        <div className="rounded-2xl border border-line bg-ink-950/60 p-5">
+        <div className="rounded-xl border border-line bg-ink-950/60 p-5">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-mist-500">Evaluation</p>
           <div className="mt-4 space-y-3">
             {simulationSteps.map((step, index) => {

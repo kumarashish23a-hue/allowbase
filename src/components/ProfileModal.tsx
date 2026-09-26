@@ -196,8 +196,8 @@ export function ProfileModal({ open, onClose, onOpenSetup }: ProfileModalProps) 
       ) : (
         <div className="space-y-6">
           {/* Identity */}
-          <div className="flex items-center gap-4 rounded-2xl border border-line bg-ink-950/60 p-5">
-            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-accent-500/20 text-2xl font-bold text-accent-200">
+          <div className="flex items-center gap-4 rounded-xl border border-line bg-ink-950/60 p-5">
+            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-accent-500/20 text-2xl font-bold text-accent-200">
               {initial}
             </span>
             <div className="min-w-0">
@@ -208,7 +208,7 @@ export function ProfileModal({ open, onClose, onOpenSetup }: ProfileModalProps) 
           </div>
 
           {/* Editable profile */}
-          <div className="rounded-2xl border border-line bg-ink-950/60 p-5">
+          <div className="rounded-xl border border-line bg-ink-950/60 p-5">
             <div className="flex items-center gap-2">
               <UserRound size={16} className="text-accent-300" />
               <h4 className="text-sm font-semibold text-mist-100">Profile details</h4>
@@ -258,7 +258,7 @@ export function ProfileModal({ open, onClose, onOpenSetup }: ProfileModalProps) 
                 type="button"
                 disabled={saving}
                 onClick={() => void saveProfile()}
-                className="inline-flex items-center gap-2 rounded-xl bg-accent-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-xl bg-accent-500 px-4 py-2.5 text-sm font-semibold text-[#06202a] transition hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
                 {saving ? 'Saving…' : 'Save changes'}
@@ -268,7 +268,7 @@ export function ProfileModal({ open, onClose, onOpenSetup }: ProfileModalProps) 
           </div>
 
           {/* Organization */}
-          <div className="rounded-2xl border border-line bg-ink-950/60 p-5">
+          <div className="rounded-xl border border-line bg-ink-950/60 p-5">
             <div className="flex items-center gap-2">
               <Building2 size={16} className="text-accent-300" />
               <h4 className="text-sm font-semibold text-mist-100">Organization</h4>
@@ -322,7 +322,7 @@ export function ProfileModal({ open, onClose, onOpenSetup }: ProfileModalProps) 
                     type="button"
                     disabled={creatingOrg}
                     onClick={() => void handleCreateOrg()}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent-500 px-4 py-2.5 text-sm font-semibold text-[#06202a] transition hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {creatingOrg ? <Loader2 size={15} className="animate-spin" /> : <Building2 size={15} />}
                     {creatingOrg ? 'Creating…' : 'Create organization'}

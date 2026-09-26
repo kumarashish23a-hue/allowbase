@@ -99,15 +99,15 @@ export function Approvals() {
 
         <div className="mt-12">
           {signedIn === false ? (
-            <div className="rounded-2xl border border-line bg-ink-950/60 p-8 text-center">
+            <div className="rounded-xl border border-line bg-ink-950/60 p-8 text-center">
               <p className="text-sm text-mist-300">Sign in to review approval requests for your workspace.</p>
             </div>
           ) : signedIn === null && !error ? (
-            <div className="rounded-2xl border border-line bg-ink-950/60 p-8">
+            <div className="rounded-xl border border-line bg-ink-950/60 p-8">
               <p className="text-sm text-mist-500">Loading approvals…</p>
             </div>
           ) : error ? (
-            <div className="rounded-2xl border border-rose-400/30 bg-ink-950/60 p-8">
+            <div className="rounded-xl border border-rose-400/30 bg-ink-950/60 p-8">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-rose-400">Could not load approvals</p>
               <p className="mt-2 text-sm text-mist-300">{error}</p>
             </div>
@@ -121,14 +121,14 @@ export function Approvals() {
                   </h3>
                 </div>
                 {pending.length === 0 ? (
-                  <p className="mt-4 rounded-2xl border border-line bg-ink-950/60 p-6 text-sm text-mist-500">
+                  <p className="mt-4 rounded-xl border border-line bg-ink-950/60 p-6 text-sm text-mist-500">
                     Nothing waiting. Requests paused by a require-approval policy will appear here.
                   </p>
                 ) : (
                   <div className="mt-4 grid gap-4 lg:grid-cols-2">
                     {pending.map((item, index) => (
                       <Reveal key={item.id} delay={index * 0.05}>
-                        <div className="flex h-full flex-col rounded-2xl border border-line bg-ink-950/60 p-6 shadow-card">
+                        <div className="flex h-full flex-col rounded-xl border border-line bg-ink-950/60 p-6 shadow-card">
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <p className="text-base font-semibold text-mist-100">{item.request.purpose}</p>
@@ -202,7 +202,7 @@ export function Approvals() {
                     {decided.map((item) => (
                       <div
                         key={item.id}
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-ink-950/60 px-5 py-4"
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-ink-950/60 px-5 py-4"
                       >
                         <div>
                           <p className="text-sm font-semibold text-mist-100">{item.request.purpose}</p>

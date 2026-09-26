@@ -63,15 +63,15 @@ export function Navbar({ onSignIn, onProfile }: NavbarProps) {
   return (
     <header
       className={`fixed inset-x-0 top-0 z-[80] transition-all duration-300 ${
-        scrolled ? 'border-b border-line bg-ink-950/85 backdrop-blur-xl' : 'border-b border-transparent bg-transparent'
+        scrolled ? 'border-b border-line bg-[#0b1017]/90 backdrop-blur-md' : 'border-b border-transparent bg-transparent'
       }`}
     >
-      <nav aria-label="Primary" className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <a href="#top" className="flex items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-ink-800">
-            <ShieldCheck size={18} className="text-accent-300" />
+      <nav aria-label="Primary" className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <a href="#top" className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-ink-800">
+            <ShieldCheck size={16} className="text-accent-300" />
           </span>
-          <span className="text-[13px] font-bold uppercase tracking-[0.18em] text-mist-100">
+          <span className="text-[12px] font-bold uppercase tracking-[0.16em] text-mist-100">
             Data Control Plane
           </span>
         </a>
@@ -92,7 +92,7 @@ export function Navbar({ onSignIn, onProfile }: NavbarProps) {
           {authButton}
           <a
             href="#get-started"
-            className="rounded-lg bg-accent-500 px-4 py-2 text-sm font-semibold text-white shadow-card transition hover:bg-accent-400"
+            className="rounded-lg bg-accent-500 px-4 py-2 text-sm font-semibold text-[#06202a] shadow-card transition hover:bg-accent-400"
           >
             Get Started
           </a>
@@ -116,7 +116,7 @@ export function Navbar({ onSignIn, onProfile }: NavbarProps) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.22 }}
-            className="border-t border-line bg-ink-950/95 px-4 pb-6 pt-4 backdrop-blur-xl lg:hidden"
+            className="border-t border-line bg-[#0b1017]/95 px-4 pb-6 pt-4 backdrop-blur-md lg:hidden"
           >
             <div className="flex flex-col gap-1">
               {navItems.map((item) => (
@@ -160,7 +160,7 @@ export function Navbar({ onSignIn, onProfile }: NavbarProps) {
               <a
                 href="#get-started"
                 onClick={() => setOpen(false)}
-                className="flex-1 rounded-lg bg-accent-500 px-4 py-3 text-center text-sm font-semibold text-white"
+                className="flex-1 rounded-lg bg-accent-500 px-4 py-3 text-center text-sm font-semibold text-[#06202a]"
               >
                 Get Started
               </a>

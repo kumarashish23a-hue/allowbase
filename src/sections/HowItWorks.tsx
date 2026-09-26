@@ -16,9 +16,9 @@ export function HowItWorks() {
           <div className="space-y-6">
             {howSteps.map((step, index) => (
               <Reveal key={step.index} delay={index * 0.06}>
-                <div className="relative grid gap-6 rounded-2xl border border-line bg-ink-950/60 p-6 sm:p-8 lg:grid-cols-[80px_1fr_1fr] lg:items-start">
+                <div className="relative grid gap-6 rounded-xl border border-line bg-ink-950/60 p-6 sm:p-8 lg:grid-cols-[80px_1fr_1fr] lg:items-start">
                   <div className="flex lg:justify-center">
-                    <span className="flex h-14 w-14 items-center justify-center rounded-2xl border border-accent-400/40 bg-accent-500/10 text-sm font-bold text-accent-200">
+                    <span className="flex h-14 w-14 items-center justify-center rounded-xl border border-accent-400/40 bg-accent-500/10 text-sm font-bold text-accent-200">
                       {step.index}
                     </span>
                   </div>

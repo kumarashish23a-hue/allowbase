@@ -14,7 +14,7 @@ export function UseCases() {
         <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {useCases.map((useCase, index) => (
             <Reveal key={useCase.title} delay={index * 0.06}>
-              <div className="h-full rounded-2xl border border-line bg-ink-950/60 p-6 shadow-card transition hover:border-line-strong sm:p-8">
+              <div className="h-full rounded-xl border border-line bg-ink-950/60 p-6 shadow-card transition hover:border-line-strong sm:p-8">
                 <h3 className="text-lg font-semibold tracking-tight text-mist-100">{useCase.title}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-mist-400">{useCase.description}</p>
                 <ul className="mt-5 space-y-2">

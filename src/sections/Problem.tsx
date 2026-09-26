@@ -18,7 +18,7 @@ export function Problem() {
           const Icon = icons[index % icons.length];
           return (
             <Reveal key={problem.title} delay={index * 0.08}>
-              <div className="h-full rounded-2xl border border-line bg-ink-900/60 p-6 shadow-card transition hover:border-line-strong">
+              <div className="h-full rounded-xl border border-line bg-ink-900/60 p-6 shadow-card transition hover:border-line-strong">
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-ink-800 text-accent-300">
                   <Icon size={18} />
                 </span>

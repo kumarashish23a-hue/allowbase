@@ -176,7 +176,7 @@ export function CreatePolicyModal({ open, onClose, onCreate }: CreatePolicyModal
         <button
           type="button"
           onClick={save}
-          className="w-full rounded-xl bg-accent-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-accent-400"
+          className="w-full rounded-xl bg-accent-500 px-4 py-3 text-sm font-semibold text-[#06202a] transition hover:bg-accent-400"
         >
           Save demo policy
         </button>

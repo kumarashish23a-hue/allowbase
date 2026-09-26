@@ -61,7 +61,7 @@ export function PolicyEngine() {
       <div className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {policies.map((policy, index) => (
           <Reveal key={policy.id} delay={index * 0.06}>
-            <div className="flex h-full flex-col rounded-2xl border border-line bg-ink-900/60 p-6 shadow-card transition hover:border-line-strong">
+            <div className="flex h-full flex-col rounded-xl border border-line bg-ink-900/60 p-6 shadow-card transition hover:border-line-strong">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="text-base font-semibold text-mist-100">{policy.name}</h3>
                 <span

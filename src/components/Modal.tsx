@@ -55,7 +55,7 @@ export function Modal({ open, title, subtitle, onClose, children, wide = false }
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.98 }}
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            className={`relative w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} overflow-hidden rounded-2xl border border-line bg-ink-900 shadow-panel`}
+            className={`relative w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} overflow-hidden rounded-xl border border-line bg-ink-900 shadow-panel`}
           >
             <div className="flex items-start justify-between gap-6 border-b border-line px-6 py-5">
               <div>

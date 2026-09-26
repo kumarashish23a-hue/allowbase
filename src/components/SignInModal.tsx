@@ -37,7 +37,7 @@ export function SignInModal({ open, onClose, onAuthSuccess }: SignInModalProps) 
         <button
           type="button"
           onClick={onClose}
-          className="mt-6 w-full rounded-xl bg-accent-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-accent-400"
+          className="mt-6 w-full rounded-xl bg-accent-500 px-4 py-3 text-sm font-semibold text-[#06202a] transition hover:bg-accent-400"
         >
           Back to the prototype
         </button>
@@ -173,7 +173,7 @@ export function SignInModal({ open, onClose, onAuthSuccess }: SignInModalProps) 
           type="button"
           disabled={busy || !email || !password}
           onClick={() => void submit()}
-          className="w-full rounded-xl bg-accent-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full rounded-xl bg-accent-500 px-4 py-3 text-sm font-semibold text-[#06202a] transition hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {busy ? 'Please wait…' : mode === 'signin' ? 'Sign in' : 'Create account'}
         </button>

@@ -2,14 +2,14 @@
 
 @theme {
   --color-ink-950: #080b10;
-  --color-ink-900: #10151d;
-  --color-ink-850: #121a24;
+  --color-ink-900: #101720;
+  --color-ink-850: #111a24;
   --color-ink-800: #151c26;
   --color-ink-700: #1a2330;
   --color-ink-600: #212c3e;
 
-  --color-line: #263241;
-  --color-line-strong: #3a4c64;
+  --color-line: #24303d;
+  --color-line-strong: #35475c;
 
   --color-mist-100: #f1f5f9;
   --color-mist-200: #e2e8f0;
@@ -25,11 +25,11 @@
   --color-accent-600: #0e7490;
 
   --color-mint-400: #34d399;
-  --color-amber-400: #e8b45a;
+  --color-amber-400: #f59e0b;
   --color-rose-400: #f87171;
 
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
 
   --shadow-panel: 0 24px 80px -32px rgba(2, 6, 18, 0.9);
   --shadow-card: 0 18px 50px -28px rgba(2, 6, 18, 0.85);
@@ -106,6 +106,16 @@ body {
 }
 .thin-scroll::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* Extremely subtle infrastructure grid for hero/backdrop use. */
+.bg-blueprint-grid {
+  background-image:
+    linear-gradient(to right, rgb(36 48 61 / 0.5) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(36 48 61 / 0.5) 1px, transparent 1px);
+  background-size: 44px 44px;
+  -webkit-mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 25%, transparent 78%);
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 25%, transparent 78%);
 }
 
 .code-block {

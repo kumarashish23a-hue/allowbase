@@ -20,7 +20,7 @@ export function Faq() {
           const open = openIndex === index;
           return (
             <Reveal key={faq.question} delay={index * 0.04}>
-              <div className={`overflow-hidden rounded-2xl border transition ${open ? 'border-line-strong bg-ink-900/70' : 'border-line bg-ink-900/40'}`}>
+              <div className={`overflow-hidden rounded-xl border transition ${open ? 'border-line-strong bg-ink-900/70' : 'border-line bg-ink-900/40'}`}>
                 <button
                   type="button"
                   onClick={() => setOpenIndex(open ? null : index)}

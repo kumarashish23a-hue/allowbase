@@ -44,7 +44,7 @@ const inputClass =
   'mt-2 w-full rounded-xl border border-line bg-ink-950/70 px-3 py-2.5 text-sm text-mist-100 placeholder:text-mist-600 focus:border-accent-400/60 focus:outline-none';
 const labelClass = 'text-xs font-semibold uppercase tracking-[0.16em] text-mist-500';
 const primaryButtonClass =
-  'w-full rounded-xl bg-accent-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-60';
+  'w-full rounded-xl bg-accent-500 px-4 py-3 text-sm font-semibold text-[#06202a] transition hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-60';
 
 interface DiscoveredColumn {
   name: string;
@@ -285,7 +285,7 @@ export function DataSources() {
         <button
           type="button"
           onClick={openConnect}
-          className="rounded-xl bg-accent-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-accent-400"
+          className="rounded-xl bg-accent-500 px-4 py-2.5 text-sm font-semibold text-[#06202a] transition hover:bg-accent-400"
         >
           Connect PostgreSQL
         </button>
@@ -294,7 +294,7 @@ export function DataSources() {
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {sources.map((source, index) => (
           <Reveal key={source.id} delay={index * 0.05}>
-            <div className="flex h-full flex-col rounded-2xl border border-line bg-ink-900/60 p-6 shadow-card transition hover:border-line-strong">
+            <div className="flex h-full flex-col rounded-xl border border-line bg-ink-900/60 p-6 shadow-card transition hover:border-line-strong">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="text-base font-semibold text-mist-100">{source.name}</h3>
                 {source.isLive ? (

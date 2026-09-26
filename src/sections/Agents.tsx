@@ -124,7 +124,7 @@ export function Agents() {
         <div className="mt-12 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {agents.map((agent, index) => (
             <Reveal key={agent.id} delay={index * 0.06}>
-              <div className="flex h-full flex-col rounded-2xl border border-line bg-ink-950/60 p-6 shadow-card">
+              <div className="flex h-full flex-col rounded-xl border border-line bg-ink-950/60 p-6 shadow-card">
                 <div className="flex items-start justify-between gap-3">
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-ink-800 text-accent-300">
                     <Bot size={18} />

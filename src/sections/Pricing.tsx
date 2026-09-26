@@ -19,7 +19,7 @@ export function Pricing({ onDemo }: PricingProps) {
         {pricingTiers.map((tier, index) => (
           <Reveal key={tier.name} delay={index * 0.08}>
             <div
-              className={`flex h-full flex-col rounded-2xl border p-6 shadow-card sm:p-8 ${
+              className={`flex h-full flex-col rounded-xl border p-6 shadow-card sm:p-8 ${
                 tier.featured
                   ? 'border-accent-400/50 bg-accent-500/[0.07]'
                   : 'border-line bg-ink-900/60'
@@ -41,7 +41,7 @@ export function Pricing({ onDemo }: PricingProps) {
                   <button
                     type="button"
                     onClick={onDemo}
-                    className="w-full rounded-xl bg-accent-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-accent-400"
+                    className="w-full rounded-xl bg-accent-500 px-4 py-3 text-sm font-semibold text-[#06202a] transition hover:bg-accent-400"
                   >
                     {tier.cta}
                   </button>

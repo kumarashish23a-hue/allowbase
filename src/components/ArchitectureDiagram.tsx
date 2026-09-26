@@ -46,9 +46,14 @@ const examples = [
 ];
 
 export function ArchitectureDiagram() {
+  const getReducedMotion = () =>
+    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   const [exampleIndex, setExampleIndex] = useState(0);
-  const [stage, setStage] = useState(0);
-  const [done, setDone] = useState(false);
+  const [stage, setStage] = useState(() => (getReducedMotion() ? stages.length - 1 : 0));
+  // Reduced motion: show the completed inspection immediately, no auto-cycling.
+  const [done, setDone] = useState(getReducedMotion);
+  const [reducedMotion, setReducedMotion] = useState(getReducedMotion);
   const timer = useRef<number | null>(null);
 
   const example = examples[exampleIndex];
@@ -59,6 +64,14 @@ export function ArchitectureDiagram() {
   }, []);
 
   useEffect(() => {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const onChange = (event: MediaQueryListEvent) => setReducedMotion(event.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+
+  useEffect(() => {
+    if (reducedMotion) return;
     if (done) {
       timer.current = window.setTimeout(() => {
         setExampleIndex((value) => (value + 1) % examples.length);
@@ -80,10 +93,10 @@ export function ArchitectureDiagram() {
     return () => {
       if (timer.current) window.clearTimeout(timer.current);
     };
-  }, [stage, done, restart]);
+  }, [stage, done, restart, reducedMotion]);
 
   return (
-    <div className="relative overflow-hidden rounded-3xl border border-line bg-ink-900/70 shadow-panel">
+    <div className="relative overflow-hidden rounded-xl border border-line bg-ink-900/70 shadow-card">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(700px_320px_at_50%_0%,rgba(34,211,238,0.18),transparent_70%)]" />
       <div className="relative grid gap-6 p-6 sm:p-8 lg:grid-cols-[1fr_1.25fr_1fr] lg:p-10">
         <div>
@@ -107,7 +120,7 @@ export function ArchitectureDiagram() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-accent-400/30 bg-ink-950/70 p-5 sm:p-6">
+        <div className="rounded-lg border border-accent-400/30 bg-ink-950/70 p-5 sm:p-6">
           <div className="flex items-center justify-between">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-300">Data Control Plane</p>
             <button
