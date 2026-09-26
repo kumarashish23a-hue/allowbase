@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Navbar } from './components/Navbar';
 import { ProfileModal } from './components/ProfileModal';
 import { RequestSimulator } from './components/RequestSimulator';
+import { SetupModal } from './components/SetupModal';
 import { SignInModal } from './components/SignInModal';
 import { Agents } from './sections/Agents';
 import { AIRequest } from './sections/AIRequest';
@@ -19,22 +20,36 @@ import { Problem } from './sections/Problem';
 import { Security } from './sections/Security';
 import { UseCases } from './sections/UseCases';
 import { getActiveOrganization } from './services/organizationService';
+import { getSetupStatus } from './services/setupService';
 
 function App() {
   const [simulatorOpen, setSimulatorOpen] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(false);
 
   const openSimulator = () => setSimulatorOpen(true);
 
-  /** After sign-in/sign-up: if the user has no organization yet, open the profile so they can create one. */
+  /**
+   * After sign-in/sign-up: open the workspace setup checklist when anything
+   * is still incomplete (no org, no data, evaluator not deployed).
+   * Fully-set-up users land straight back on the page.
+   */
   const handleAuthSuccess = async () => {
     setSignInOpen(false);
     try {
-      const org = await getActiveOrganization();
-      if (!org) setProfileOpen(true);
+      // Fast path: no org yet -> setup modal will handle org creation.
+      const org = await getActiveOrganization().catch(() => null);
+      if (!org) {
+        setSetupOpen(true);
+        return;
+      }
+      const status = await getSetupStatus().catch(() => null);
+      if (status && (!status.hasData || status.edgeFunction !== 'deployed')) {
+        setSetupOpen(true);
+      }
     } catch {
-      setProfileOpen(true);
+      setSetupOpen(true);
     }
   };
 
@@ -66,7 +81,13 @@ function App() {
       <Footer />
       <RequestSimulator open={simulatorOpen} onClose={() => setSimulatorOpen(false)} />
       <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} onAuthSuccess={() => void handleAuthSuccess()} />
-      <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
+      <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} onOpenSetup={() => setSetupOpen(true)} />
+      <SetupModal
+        open={setupOpen}
+        onClose={() => setSetupOpen(false)}
+        onSignIn={() => setSignInOpen(true)}
+        onTrySimulator={openSimulator}
+      />
     </div>
   );
 }

@@ -1,0 +1,299 @@
+import { getActiveOrganizationId, getSupabase, isSupabaseConfigured } from '../lib/supabase';
+
+export type EdgeFunctionStatus = 'deployed' | 'missing' | 'unknown';
+
+export interface SetupStatus {
+  configured: boolean;
+  signedIn: boolean;
+  hasOrg: boolean;
+  orgName: string | null;
+  /** True when the org already has models, assets, or policies. */
+  hasData: boolean;
+  edgeFunction: EdgeFunctionStatus;
+}
+
+export const EDGE_FUNCTION_NAME = 'evaluate-ai-request';
+const EDGE_FUNCTION_CODE_URL =
+  'https://raw.githubusercontent.com/kumarashish23a-hue/dataplane/main/supabase/functions/evaluate-ai-request/index.ts';
+
+/** Full setup checklist state for the current user. */
+export async function getSetupStatus(): Promise<SetupStatus> {
+  const fallback: SetupStatus = {
+    configured: isSupabaseConfigured(),
+    signedIn: false,
+    hasOrg: false,
+    orgName: null,
+    hasData: false,
+    edgeFunction: 'unknown',
+  };
+  const supabase = getSupabase();
+  if (!supabase) return fallback;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return fallback;
+
+  const { data: memberships } = await supabase
+    .from('organization_members')
+    .select('organization_id, organizations ( name )')
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+    .limit(1);
+  const first = (memberships as { organization_id: string; organizations: { name: string } | null }[] | null)?.[0];
+  if (!first) return { ...fallback, signedIn: true };
+
+  const orgId = first.organization_id;
+  const [models, assets, policies] = await Promise.all([
+    supabase.from('ai_models').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
+    supabase.from('data_assets').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
+    supabase.from('policies').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
+  ]);
+  const hasData = (models.count ?? 0) + (assets.count ?? 0) + (policies.count ?? 0) > 0;
+  const edgeFunction = await probeEdgeFunction();
+  return {
+    configured: true,
+    signedIn: true,
+    hasOrg: true,
+    orgName: first.organizations?.name ?? null,
+    hasData,
+    edgeFunction,
+  };
+}
+
+/**
+ * Probe whether the evaluate-ai-request Edge Function is deployed.
+ * Sends an empty body: a deployed function answers 400/401 (validation),
+ * a missing one answers 404. No database side effects either way.
+ */
+export async function probeEdgeFunction(): Promise<EdgeFunctionStatus> {
+  const supabase = getSupabase();
+  if (!supabase) return 'unknown';
+  try {
+    const { error } = await supabase.functions.invoke(EDGE_FUNCTION_NAME, { body: {} });
+    if (!error) return 'deployed';
+    const status = (error as { context?: { status?: number } }).context?.status;
+    const message = String((error as Error).message ?? '').toLowerCase();
+    if (status === 404 || message.includes('not found')) return 'missing';
+    // 400/401/500 all prove the function exists and answered.
+    return 'deployed';
+  } catch {
+    return 'unknown';
+  }
+}
+
+export interface StarterDataSummary {
+  sources: number;
+  assets: number;
+  models: number;
+  agents: number;
+  policies: number;
+  findings: number;
+}
+
+/**
+ * Insert the starter workspace (sources, assets, models, agent, policies,
+ * finding) for the active organization via the normal API, honoring RLS.
+ * Only fills categories that are currently empty. Requires the caller to be
+ * signed in as org owner/admin/security.
+ */
+export async function loadStarterData(): Promise<StarterDataSummary> {
+  const supabase = getSupabase();
+  const orgId = await getActiveOrganizationId();
+  if (!supabase || !orgId) throw new Error('Sign in and create an organization first.');
+  const summary: StarterDataSummary = { sources: 0, assets: 0, models: 0, agents: 0, policies: 0, findings: 0 };
+
+  const { count: sourceCount } = await supabase
+    .from('data_sources')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', orgId);
+  let sourceIds: Record<string, string> = {};
+  if ((sourceCount ?? 0) === 0) {
+    const { data, error } = await supabase
+      .from('data_sources')
+      .insert([
+        { organization_id: orgId, name: 'PostgreSQL', type: 'postgresql', status: 'demo', description: 'Primary application database.' },
+        { organization_id: orgId, name: 'Google Drive', type: 'google_drive', status: 'demo', description: 'Company documents and shared drives.' },
+      ])
+      .select('id,type');
+    if (error) throw new Error('Could not create data sources.');
+    for (const row of data ?? []) sourceIds[row.type] = row.id;
+    summary.sources = data?.length ?? 0;
+  } else {
+    const { data } = await supabase.from('data_sources').select('id,type').eq('organization_id', orgId);
+    for (const row of data ?? []) sourceIds[row.type] = row.id;
+  }
+
+  const { count: assetCount } = await supabase
+    .from('data_assets')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', orgId);
+  let customerDbId: string | null = null;
+  if ((assetCount ?? 0) === 0) {
+    const { data, error } = await supabase
+      .from('data_assets')
+      .insert([
+        {
+          organization_id: orgId,
+          data_source_id: sourceIds['postgresql'] ?? null,
+          name: 'Customer Database',
+          asset_type: 'table',
+          classification: 'restricted',
+          sensitivity_level: 'high',
+          metadata: { demo_note: 'Customer Database' },
+        },
+        {
+          organization_id: orgId,
+          data_source_id: sourceIds['google_drive'] ?? null,
+          name: 'Product Documentation',
+          asset_type: 'document',
+          classification: 'internal',
+          sensitivity_level: 'low',
+          metadata: {},
+        },
+      ])
+      .select('id,name');
+    if (error) throw new Error('Could not create data assets.');
+    customerDbId = (data ?? []).find((row) => row.name === 'Customer Database')?.id ?? null;
+    summary.assets = data?.length ?? 0;
+  } else {
+    const { data } = await supabase
+      .from('data_assets')
+      .select('id,name')
+      .eq('organization_id', orgId)
+      .eq('name', 'Customer Database')
+      .limit(1);
+    customerDbId = data?.[0]?.id ?? null;
+  }
+
+  const { count: modelCount } = await supabase
+    .from('ai_models')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', orgId);
+  let internalModelId: string | null = null;
+  if ((modelCount ?? 0) === 0) {
+    const { data, error } = await supabase
+      .from('ai_models')
+      .insert([
+        { organization_id: orgId, name: 'Claude', provider: 'Anthropic', model_identifier: 'claude-4', model_type: 'chat', is_approved: true, is_external: true, risk_level: 'medium' },
+        { organization_id: orgId, name: 'Internal Support Agent', provider: 'Internal', model_identifier: 'internal-support-1', model_type: 'chat', is_approved: true, is_external: false, risk_level: 'low' },
+      ])
+      .select('id,name');
+    if (error) throw new Error('Could not create AI models.');
+    internalModelId = (data ?? []).find((row) => row.name === 'Internal Support Agent')?.id ?? null;
+    summary.models = data?.length ?? 0;
+  } else {
+    const { data } = await supabase
+      .from('ai_models')
+      .select('id,name')
+      .eq('organization_id', orgId)
+      .eq('name', 'Internal Support Agent')
+      .limit(1);
+    internalModelId = data?.[0]?.id ?? null;
+  }
+
+  const { count: agentCount } = await supabase
+    .from('ai_agents')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', orgId);
+  if ((agentCount ?? 0) === 0) {
+    const { data, error } = await supabase
+      .from('ai_agents')
+      .insert([
+        {
+          organization_id: orgId,
+          name: 'Customer Support Agent',
+          description: 'Answers customer questions from docs and tickets.',
+          ai_model_id: internalModelId,
+          status: 'active',
+          risk_level: 'low',
+          metadata: { owner: 'Support' },
+        },
+      ])
+      .select('id');
+    if (error) throw new Error('Could not create the starter agent.');
+    summary.agents = data?.length ?? 0;
+  }
+
+  const { count: policyCount } = await supabase
+    .from('policies')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', orgId);
+  if ((policyCount ?? 0) === 0) {
+    const { data, error } = await supabase.from('policies').insert([
+      {
+        organization_id: orgId,
+        name: 'Customer PII Protection',
+        description: 'Restricted customer data cannot be sent to external AI.',
+        status: 'active',
+        priority: 10,
+        rule: {
+          conditions: [
+            { field: 'data.classification', operator: 'in', value: ['restricted', 'confidential'] },
+            { field: 'ai.is_external', operator: 'equals', value: true },
+          ],
+        },
+        action: 'block',
+      },
+      {
+        organization_id: orgId,
+        name: 'Internal AI Access',
+        description: 'Approved internal models may access internal data.',
+        status: 'active',
+        priority: 50,
+        rule: {
+          conditions: [
+            { field: 'ai.is_approved', operator: 'equals', value: true },
+            { field: 'ai.is_external', operator: 'equals', value: false },
+          ],
+        },
+        action: 'allow',
+      },
+    ]).select('id');
+    if (error) throw new Error('Could not create starter policies.');
+    summary.policies = data?.length ?? 0;
+  }
+
+  const { count: findingCount } = await supabase
+    .from('sensitive_data_findings')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', orgId);
+  if ((findingCount ?? 0) === 0 && customerDbId) {
+    const { data, error } = await supabase.from('sensitive_data_findings').insert([
+      {
+        organization_id: orgId,
+        data_asset_id: customerDbId,
+        finding_type: 'pii',
+        severity: 'high',
+        description: 'Customer identifiers and contact fields detected.',
+        field_name: 'email_address',
+        detected_count: 128400,
+        status: 'open',
+        metadata: { confidence: 0.98 },
+      },
+    ]).select('id');
+    if (error) throw new Error('Could not create the starter finding.');
+    summary.findings = data?.length ?? 0;
+  }
+
+  return summary;
+}
+
+/** Deep link to the Supabase dashboard's Functions page for this project. */
+export function getFunctionsDashboardUrl(): string | null {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const url = import.meta.env.VITE_SUPABASE_URL as string;
+    const ref = new URL(url).hostname.split('.')[0];
+    if (!ref) return null;
+    return `https://supabase.com/dashboard/project/${ref}/functions`;
+  } catch {
+    return null;
+  }
+}
+
+/** Fetch the Edge Function source so the user can copy-paste it into the dashboard. */
+export async function fetchEdgeFunctionCode(): Promise<string> {
+  const res = await fetch(EDGE_FUNCTION_CODE_URL);
+  if (!res.ok) throw new Error('Could not download the function code.');
+  return res.text();
+}

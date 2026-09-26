@@ -13,6 +13,7 @@ import { Modal } from './Modal';
 interface ProfileModalProps {
   open: boolean;
   onClose: () => void;
+  onOpenSetup?: () => void;
 }
 
 interface WorkspaceStats {
@@ -26,7 +27,7 @@ const inputClass =
   'mt-2 w-full rounded-xl border border-line bg-ink-950/70 px-3 py-2.5 text-sm text-mist-100 focus:border-accent-400/60 focus:outline-none';
 const labelClass = 'text-xs font-semibold uppercase tracking-[0.16em] text-mist-500';
 
-export function ProfileModal({ open, onClose }: ProfileModalProps) {
+export function ProfileModal({ open, onClose, onOpenSetup }: ProfileModalProps) {
   const configured = isSupabaseConfigured();
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState('');
@@ -332,6 +333,20 @@ export function ProfileModal({ open, onClose }: ProfileModalProps) {
           </div>
 
           {error ? <p className="text-sm text-rose-400">{error}</p> : null}
+
+          {onOpenSetup && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenSetup();
+              }}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-accent-500/40 bg-accent-500/10 px-4 py-3 text-sm font-semibold text-accent-300 transition hover:border-accent-400/60 hover:text-accent-200"
+            >
+              <Building2 size={15} />
+              Complete workspace setup
+            </button>
+          )}
 
           <button
             type="button"
