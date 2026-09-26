@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal } from '../components/Modal';
 import { Reveal } from '../components/Reveal';
 import { SectionHeading } from '../components/SectionHeading';
 import { connectedSources } from '../data/mock';
+import { listDataSources } from '../services/dataSourceService';
 import type { DataSource } from '../types';
 
 const riskTone: Record<DataSource['risk'], string> = {
@@ -12,7 +13,22 @@ const riskTone: Record<DataSource['risk'], string> = {
 };
 
 export function DataSources() {
+  const [sources, setSources] = useState<DataSource[]>(connectedSources);
   const [selected, setSelected] = useState<DataSource | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    listDataSources()
+      .then((loaded) => {
+        if (!cancelled && loaded.length > 0) setSources(loaded);
+      })
+      .catch(() => {
+        /* keep mock sources when offline */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
@@ -23,7 +39,7 @@ export function DataSources() {
       />
 
       <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {connectedSources.map((source, index) => (
+        {sources.map((source, index) => (
           <Reveal key={source.id} delay={index * 0.05}>
             <div className="flex h-full flex-col rounded-2xl border border-line bg-ink-900/60 p-6 shadow-card transition hover:border-line-strong">
               <div className="flex items-center justify-between gap-3">

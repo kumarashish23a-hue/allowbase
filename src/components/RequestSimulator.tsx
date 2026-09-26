@@ -1,8 +1,9 @@
 import { CheckCircle2, Loader2, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { simulationSteps } from '../data/mock';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { evaluateRequest } from '../services/aiRequestService';
 import type { MockEvaluation } from '../utils/decision';
-import { evaluateMockRequest } from '../utils/decision';
 import { Modal } from './Modal';
 
 interface RequestSimulatorProps {
@@ -53,8 +54,16 @@ export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
           if (index === simulationSteps.length - 1) {
             timers.current.push(
               window.setTimeout(() => {
-                setResult(evaluateMockRequest({ user, ai, data, purpose }));
-                setRunning(false);
+                void evaluateRequest({ user, ai, data, purpose })
+                  .then((evaluation) => {
+                    setResult(evaluation);
+                  })
+                  .catch(() => {
+                    setResult(null);
+                  })
+                  .finally(() => {
+                    setRunning(false);
+                  });
               }, 650),
             );
           }
@@ -71,7 +80,17 @@ export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
         : 'border-mint-400/30 bg-mint-400/10 text-mint-400';
 
   return (
-    <Modal open={open} onClose={onClose} title="Simulate AI Request" subtitle="Frontend-only demo. No data leaves your browser." wide>
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Simulate AI Request"
+      subtitle={
+        isSupabaseConfigured()
+          ? 'Evaluated by your Supabase backend when signed in, otherwise simulated locally.'
+          : 'Frontend-only demo. No data leaves your browser.'
+      }
+      wide
+    >
       <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
         <div>
           <div className="flex flex-wrap gap-2">

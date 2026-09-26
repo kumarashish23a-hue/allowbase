@@ -1,8 +1,10 @@
 import { Bot, Check, Pause, Play, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Reveal } from '../components/Reveal';
 import { SectionHeading } from '../components/SectionHeading';
 import { agents as seedAgents } from '../data/mock';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { listAgents, setAgentStatus } from '../services/aiAgentService';
 import type { Agent } from '../types';
 
 const riskTone: Record<Agent['risk'], string> = {
@@ -14,12 +16,35 @@ const riskTone: Record<Agent['risk'], string> = {
 export function Agents() {
   const [agents, setAgents] = useState<Agent[]>(seedAgents);
 
+  useEffect(() => {
+    let cancelled = false;
+    listAgents()
+      .then((loaded) => {
+        if (!cancelled) setAgents(loaded);
+      })
+      .catch(() => {
+        /* keep seed agents when offline */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const toggle = (id: string) => {
+    const agent = agents.find((item) => item.id === id);
+    if (!agent) return;
+    const nextStatus = agent.status === 'Active' ? 'Paused' : 'Active';
     setAgents((current) =>
-      current.map((agent) =>
-        agent.id === id ? { ...agent, status: agent.status === 'Active' ? 'Paused' : 'Active' } : agent,
-      ),
+      current.map((item) => (item.id === id ? { ...item, status: nextStatus } : item)),
     );
+    if (isSupabaseConfigured()) {
+      setAgentStatus(id, nextStatus === 'Active' ? 'active' : 'paused').catch(() => {
+        // Revert the optimistic update if the backend rejects it.
+        setAgents((current) =>
+          current.map((item) => (item.id === id ? { ...item, status: agent.status } : item)),
+        );
+      });
+    }
   };
 
   return (

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Area,
   AreaChart,
@@ -13,7 +13,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { metrics, modelUsage, requestSeries, riskDistribution, sourceUsage } from '../data/mock';
+import { getDashboard, type DashboardData } from '../services/dashboardService';
 
 type Range = '24h' | '7d' | '30d';
 
@@ -51,13 +51,43 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
 
 export function Dashboard() {
   const [range, setRange] = useState<Range>('7d');
-  const series = requestSeries[range];
+  const [data, setData] = useState<DashboardData | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getDashboard(range)
+      .then((result) => {
+        if (!cancelled) setData(result);
+      })
+      .catch(() => {
+        if (!cancelled) setData(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [range ]);
+
+  const metrics = data?.metrics ?? [];
+  const series = data?.series ?? [];
+  const riskDistribution = data?.risk ?? [];
+  const modelUsage = data?.modelUsage ?? [];
+  const sourceUsage = data?.sourceUsage ?? [];
+  const live = data?.live ?? false;
 
   return (
     <div className="overflow-hidden rounded-3xl border border-line bg-ink-900/70 shadow-panel">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line px-6 py-5">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-mist-500">Platform preview</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-mist-500">
+            Platform preview{' '}
+            <span
+              className={`ml-2 rounded-full border px-2 py-0.5 text-[10px] tracking-[0.14em] ${
+                live ? 'border-mint-400/30 bg-mint-400/10 text-mint-400' : 'border-line text-mist-500'
+              }`}
+            >
+              {live ? 'LIVE' : 'SIMULATED'}
+            </span>
+          </p>
           <h3 className="mt-1 text-xl font-semibold tracking-tight text-mist-100">One control plane for your AI data.</h3>
         </div>
         <div className="flex rounded-xl border border-line bg-ink-950/60 p-1" role="tablist" aria-label="Time range">
@@ -175,7 +205,9 @@ export function Dashboard() {
       </div>
 
       <p className="border-t border-line px-6 py-4 text-xs text-mist-600">
-        Simulated dashboard. All metrics and charts use mock data for this prototype.
+        {live
+          ? 'Live data from your Supabase project, aggregated by database functions.'
+          : 'Simulated dashboard. All metrics and charts use mock data for this prototype.'}
       </p>
     </div>
   );

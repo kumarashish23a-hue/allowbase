@@ -1,9 +1,11 @@
 import { Plus } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CreatePolicyModal } from '../components/PolicyModals';
 import { Reveal } from '../components/Reveal';
 import { SectionHeading } from '../components/SectionHeading';
 import { policies as seedPolicies } from '../data/mock';
+import { isSupabaseConfigured } from '../lib/supabase';
+import { createPolicy, listPolicies } from '../services/policyService';
 import type { Policy } from '../types';
 
 const effectTone: Record<Policy['effect'], string> = {
@@ -15,6 +17,38 @@ const effectTone: Record<Policy['effect'], string> = {
 export function PolicyEngine() {
   const [policies, setPolicies] = useState<Policy[]>(seedPolicies);
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    listPolicies()
+      .then((loaded) => {
+        if (!cancelled) setPolicies(loaded);
+      })
+      .catch(() => {
+        /* keep seed policies when offline */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleCreate = async (policy: Policy) => {
+    if (isSupabaseConfigured()) {
+      try {
+        const created = await createPolicy({
+          name: policy.name,
+          description: policy.description,
+          effect: policy.effect,
+          conditions: policy.conditions,
+        });
+        setPolicies((current) => [created, ...current]);
+        return;
+      } catch {
+        /* fall through to local state */
+      }
+    }
+    setPolicies((current) => [policy, ...current]);
+  };
 
   return (
     <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
@@ -71,7 +105,9 @@ export function PolicyEngine() {
       <CreatePolicyModal
         open={open}
         onClose={() => setOpen(false)}
-        onCreate={(policy) => setPolicies((current) => [policy, ...current])}
+        onCreate={(policy) => {
+          void handleCreate(policy);
+        }}
       />
     </section>
   );

@@ -1,0 +1,8 @@
+[project]
+name = "dataplane"
+# Link with: supabase link --project-ref <your-project-ref>
+# Then: supabase db push
+
+[functions.evaluate-ai-request]
+enabled = true
+verify_jwt = true
