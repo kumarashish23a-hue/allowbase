@@ -33,7 +33,6 @@ export async function getActiveOrganizationId(): Promise<string | null> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    cachedOrgId = null;
     return null;
   }
   if (cachedOrgId !== undefined) return cachedOrgId;
@@ -46,7 +45,9 @@ export async function getActiveOrganizationId(): Promise<string | null> {
     .limit(1)
     .maybeSingle();
   const orgId: string | null = error || !data ? null : data.organization_id;
-  cachedOrgId = orgId;
+  // Cache only successful resolutions. A transient failure must never poison
+  // every later lookup for the rest of the page load.
+  if (orgId) cachedOrgId = orgId;
   return orgId;
 }
 

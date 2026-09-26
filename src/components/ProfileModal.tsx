@@ -44,6 +44,7 @@ export function ProfileModal({ open, onClose, onOpenSetup }: ProfileModalProps) 
   const [error, setError] = useState<string | null>(null);
   const [orgName, setOrgName] = useState('');
   const [creatingOrg, setCreatingOrg] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!open || !configured) return;
@@ -51,7 +52,7 @@ export function ProfileModal({ open, onClose, onOpenSetup }: ProfileModalProps) 
     setLoading(true);
     setError(null);
     setSavedNote(false);
-    (async () => {
+    const load = async () => {
       const supabase = getSupabase();
       if (!supabase) return;
       const {
@@ -59,7 +60,6 @@ export function ProfileModal({ open, onClose, onOpenSetup }: ProfileModalProps) 
       } = await supabase.auth.getUser();
       if (cancelled) return;
       if (!user) {
-        setLoading(false);
         return;
       }
       setEmail(user.email ?? '');
@@ -103,17 +103,30 @@ export function ProfileModal({ open, onClose, onOpenSetup }: ProfileModalProps) 
           requests: counts[3],
         });
       }
-      if (!cancelled) setLoading(false);
-    })().catch((err: unknown) => {
-      if (!cancelled) {
-        setError(err instanceof Error ? err.message : 'Could not load your profile.');
-        setLoading(false);
-      }
+    };
+    // Never spin forever: a stalled request surfaces an error with a retry.
+    let timer: number | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = window.setTimeout(
+        () => reject(new Error('Loading your profile timed out. Check your connection and try again.')),
+        15000,
+      );
     });
+    Promise.race([load(), timeout])
+      .then(() => {
+        if (!cancelled) setLoading(false);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Could not load your profile.');
+          setLoading(false);
+        }
+      })
+      .finally(() => window.clearTimeout(timer));
     return () => {
       cancelled = true;
     };
-  }, [open, configured]);
+  }, [open, configured, attempt]);
 
   const saveProfile = async () => {
     const supabase = getSupabase();
@@ -332,7 +345,18 @@ export function ProfileModal({ open, onClose, onOpenSetup }: ProfileModalProps) 
             )}
           </div>
 
-          {error ? <p className="text-sm text-rose-400">{error}</p> : null}
+          {error ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="text-sm text-rose-400">{error}</p>
+              <button
+                type="button"
+                onClick={() => setAttempt((a) => a + 1)}
+                className="inline-flex items-center gap-2 rounded-xl border border-line px-3 py-2 text-xs font-semibold text-mist-200 transition hover:border-line-strong hover:text-mist-100"
+              >
+                Try again
+              </button>
+            </div>
+          ) : null}
 
           {onOpenSetup && (
             <button

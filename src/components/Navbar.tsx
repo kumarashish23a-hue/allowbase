@@ -2,7 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Menu, ShieldCheck, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { navItems } from '../data/mock';
-import { getSupabase, isSupabaseConfigured } from '../lib/supabase';
+import { getSupabase, isSupabaseConfigured, clearOrgCache } from '../lib/supabase';
 import { ThemeToggle } from './ThemeToggle';
 
 interface NavbarProps {
@@ -30,6 +30,9 @@ export function Navbar({ onSignIn, onProfile }: NavbarProps) {
       setSessionEmail(data.session?.user.email ?? null);
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      // A sign-in/out can change which organization (if any) is active, so
+      // never serve the previous auth state's cached lookup.
+      clearOrgCache();
       setSessionEmail(session?.user.email ?? null);
     });
     return () => {
