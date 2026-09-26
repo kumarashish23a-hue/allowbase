@@ -3,6 +3,7 @@ import { ArrowRight, Check, Play } from 'lucide-react';
 import { ArchitectureDiagram } from '../components/ArchitectureDiagram';
 import { DashboardPreview } from '../components/DashboardPreview';
 import { Reveal } from '../components/Reveal';
+import { useTheme, vantaThemeColors } from '../theme';
 
 const VantaNet = lazy(() =>
   import('../components/VantaNet').then((module) => ({ default: module.VantaNet })),
@@ -13,10 +14,18 @@ const stackCategories = ['LLMs', 'AI Agents', 'Databases', 'Data Warehouses', 'I
 const heroAssurances = ['Metadata-only discovery', 'Deterministic policy engine', 'Append-only audit log'];
 
 export function Hero() {
+  const { theme } = useTheme();
+  const vantaColors = vantaThemeColors[theme];
+
   return (
     <section id="top" className="relative overflow-hidden pt-14">
       <Suspense fallback={null}>
-        <VantaNet />
+        {/* key remounts the canvas so its colors follow the active theme */}
+        <VantaNet
+          key={theme}
+          backgroundColor={vantaColors.background}
+          color={vantaColors.color}
+        />
       </Suspense>
       <div className="relative mx-auto max-w-7xl px-4 pb-16 pt-16 sm:px-6 sm:pt-20 lg:px-8 lg:pb-24 lg:pt-24">
         <Reveal className="mx-auto max-w-4xl text-center">
@@ -33,7 +42,7 @@ export function Hero() {
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <a
               href="#get-started"
-              className="btn-primary inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent-500 px-6 py-3.5 text-sm font-semibold text-[#06202a] transition hover:bg-accent-400 sm:w-auto"
+              className="btn-primary inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent-500 px-6 py-3.5 text-sm font-semibold text-accent-ink transition hover:bg-accent-400 sm:w-auto"
             >
               Get Started <ArrowRight size={16} />
             </a>

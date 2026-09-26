@@ -14,6 +14,7 @@ import {
   YAxis,
 } from 'recharts';
 import { getDashboard, type DashboardData } from '../services/dashboardService';
+import { chartPalette, useTheme } from '../theme';
 
 type Range = '24h' | '7d' | '30d';
 
@@ -26,8 +27,6 @@ const toneClass: Record<string, string> = {
   warn: 'text-amber-400',
 };
 
-const riskColors = ['#059669', '#d97706', '#dc2626'];
-
 interface TooltipEntry {
   name?: string;
   value?: number | string;
@@ -35,13 +34,15 @@ interface TooltipEntry {
 }
 
 function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: TooltipEntry[]; label?: string }) {
+  const { theme } = useTheme();
+  const palette = chartPalette[theme];
   if (!active || !payload || payload.length === 0) return null;
   return (
     <div className="rounded-xl border border-line bg-ink-950/95 px-3 py-2 text-xs shadow-panel">
       {label ? <p className="mb-1 font-semibold text-mist-200">{label}</p> : null}
       {payload.map((entry, index) => (
         <p key={`${entry.name ?? 'value'}-${index}`} className="text-mist-400">
-          <span style={{ color: entry.color ?? '#67e8f9' }}>●</span> {entry.name}:{' '}
+          <span style={{ color: entry.color ?? palette.legend }}>●</span> {entry.name}:{' '}
           <span className="text-mist-100">{entry.value}</span>
         </p>
       ))}
@@ -54,6 +55,8 @@ export function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const { theme } = useTheme();
+  const palette = chartPalette[theme];
 
   useEffect(() => {
     let cancelled = false;
@@ -158,16 +161,16 @@ export function Dashboard() {
                 <AreaChart data={series} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
                   <defs>
                     <linearGradient id="requestsGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.45} />
-                      <stop offset="100%" stopColor="#22d3ee" stopOpacity={0.02} />
+                      <stop offset="0%" stopColor={palette.area} stopOpacity={0.45} />
+                      <stop offset="100%" stopColor={palette.area} stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid stroke="rgba(148,163,184,0.12)" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="label" tick={{ fill: palette.tick, fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: palette.tick, fontSize: 11 }} axisLine={false} tickLine={false} />
                   <Tooltip content={<ChartTooltip />} />
-                  <Area type="monotone" dataKey="requests" name="Requests" stroke="#22d3ee" strokeWidth={2} fill="url(#requestsGradient)" />
-                  <Area type="monotone" dataKey="blocked" name="Blocked" stroke="#f87171" strokeWidth={1.5} fill="transparent" strokeDasharray="5 5" />
+                  <Area type="monotone" dataKey="requests" name="Requests" stroke={palette.area} strokeWidth={2} fill="url(#requestsGradient)" />
+                  <Area type="monotone" dataKey="blocked" name="Blocked" stroke={palette.blocked} strokeWidth={1.5} fill="transparent" strokeDasharray="5 5" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -180,7 +183,7 @@ export function Dashboard() {
                 <PieChart>
                   <Pie data={riskDistribution} dataKey="value" nameKey="name" innerRadius={58} outerRadius={88} paddingAngle={4} strokeWidth={0}>
                     {riskDistribution.map((entry, index) => (
-                      <Cell key={entry.name} fill={riskColors[index % riskColors.length]} />
+                      <Cell key={entry.name} fill={palette.risk[index % palette.risk.length]} />
                     ))}
                   </Pie>
                   <Tooltip content={<ChartTooltip />} />
@@ -191,7 +194,7 @@ export function Dashboard() {
               {riskDistribution.map((entry, index) => (
                 <div key={entry.name} className="flex items-center justify-between text-xs">
                   <span className="flex items-center gap-2 text-mist-400">
-                    <span className="h-2 w-2 rounded-full" style={{ background: riskColors[index % riskColors.length] }} />
+                    <span className="h-2 w-2 rounded-full" style={{ background: palette.risk[index % palette.risk.length] }} />
                     {entry.name} risk
                   </span>
                   <span className="text-mist-200">{entry.value}%</span>
@@ -206,10 +209,10 @@ export function Dashboard() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={modelUsage} margin={{ top: 8, right: 8, bottom: 0, left: -8 }} layout="vertical">
                   <CartesianGrid stroke="rgba(148,163,184,0.12)" horizontal={false} />
-                  <XAxis type="number" tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="model" width={118} tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <XAxis type="number" tick={{ fill: palette.tick, fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="model" width={118} tick={{ fill: palette.tickSoft, fontSize: 11 }} axisLine={false} tickLine={false} />
                   <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(122,162,255,0.08)' }} />
-                  <Bar dataKey="requests" name="Requests" fill="#06b6d4" radius={[6, 6, 6, 6]} barSize={18} />
+                  <Bar dataKey="requests" name="Requests" fill={palette.bar} radius={[6, 6, 6, 6]} barSize={18} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -221,10 +224,10 @@ export function Dashboard() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={sourceUsage} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
                   <CartesianGrid stroke="rgba(148,163,184,0.12)" vertical={false} />
-                  <XAxis dataKey="source" tick={{ fill: '#475569', fontSize: 10 }} axisLine={false} tickLine={false} interval={0} angle={-18} dy={12} height={54} />
-                  <YAxis tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="source" tick={{ fill: palette.tick, fontSize: 10 }} axisLine={false} tickLine={false} interval={0} angle={-18} dy={12} height={54} />
+                  <YAxis tick={{ fill: palette.tick, fontSize: 11 }} axisLine={false} tickLine={false} />
                   <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(122,162,255,0.08)' }} />
-                  <Bar dataKey="requests" name="Requests" fill="#34d399" radius={[6, 6, 0, 0]} barSize={22} />
+                  <Bar dataKey="requests" name="Requests" fill={palette.barGreen} radius={[6, 6, 0, 0]} barSize={22} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

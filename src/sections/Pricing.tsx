@@ -41,7 +41,7 @@ export function Pricing({ onDemo }: PricingProps) {
                   <button
                     type="button"
                     onClick={onDemo}
-                    className="w-full rounded-xl bg-accent-500 px-4 py-3 text-sm font-semibold text-[#06202a] transition hover:bg-accent-400"
+                    className="w-full rounded-xl bg-accent-500 px-4 py-3 text-sm font-semibold text-accent-ink transition hover:bg-accent-400"
                   >
                     {tier.cta}
                   </button>

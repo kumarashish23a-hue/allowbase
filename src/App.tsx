@@ -19,6 +19,7 @@ import { Security } from './sections/Security';
 import { UseCases } from './sections/UseCases';
 import { getActiveOrganization } from './services/organizationService';
 import { getSetupStatus } from './services/setupService';
+import { ThemeProvider } from './theme';
 
 // Modals are code-split: they load on demand instead of bloating the first paint.
 const ProfileModal = lazy(() => import('./components/ProfileModal').then((m) => ({ default: m.ProfileModal })));
@@ -60,10 +61,11 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen">
+    <ThemeProvider>
+      <div className="min-h-screen">
       <a
         href="#platform"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-accent-500 focus:px-4 focus:py-2 focus:text-sm focus:text-[#06202a]"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-accent-500 focus:px-4 focus:py-2 focus:text-sm focus:text-accent-ink"
       >
         Skip to content
       </a>
@@ -98,7 +100,8 @@ function App() {
           onTrySimulator={openSimulator}
         />
       </Suspense>
-    </div>
+      </div>
+    </ThemeProvider>
   );
 }
 

@@ -3,6 +3,7 @@ import { Menu, ShieldCheck, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { navItems } from '../data/mock';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabase';
+import { ThemeToggle } from './ThemeToggle';
 
 interface NavbarProps {
   onSignIn: () => void;
@@ -63,7 +64,7 @@ export function Navbar({ onSignIn, onProfile }: NavbarProps) {
   return (
     <header
       className={`fixed inset-x-0 top-0 z-[80] transition-all duration-300 ${
-        scrolled ? 'border-b border-line bg-white/85 backdrop-blur-md' : 'border-b border-transparent bg-transparent'
+        scrolled ? 'border-b border-line bg-ink-900/85 backdrop-blur-md' : 'border-b border-transparent bg-transparent'
       }`}
     >
       <nav aria-label="Primary" className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -89,10 +90,11 @@ export function Navbar({ onSignIn, onProfile }: NavbarProps) {
         </div>
 
         <div className="hidden items-center gap-3 lg:flex">
+          <ThemeToggle />
           {authButton}
           <a
             href="#get-started"
-            className="btn-primary rounded-lg bg-accent-500 px-4 py-2 text-sm font-semibold text-[#06202a] transition hover:bg-accent-400"
+            className="btn-primary rounded-lg bg-accent-500 px-4 py-2 text-sm font-semibold text-accent-ink transition hover:bg-accent-400"
           >
             Get Started
           </a>
@@ -116,7 +118,7 @@ export function Navbar({ onSignIn, onProfile }: NavbarProps) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.22 }}
-            className="border-t border-line bg-white/95 px-4 pb-6 pt-4 backdrop-blur-md lg:hidden"
+            className="border-t border-line bg-ink-900/95 px-4 pb-6 pt-4 backdrop-blur-md lg:hidden"
           >
             <div className="flex flex-col gap-1">
               {navItems.map((item) => (
@@ -160,10 +162,14 @@ export function Navbar({ onSignIn, onProfile }: NavbarProps) {
               <a
                 href="#get-started"
                 onClick={() => setOpen(false)}
-                className="flex-1 rounded-lg bg-accent-500 px-4 py-3 text-center text-sm font-semibold text-[#06202a]"
+                className="flex-1 rounded-lg bg-accent-500 px-4 py-3 text-center text-sm font-semibold text-accent-ink"
               >
                 Get Started
               </a>
+            </div>
+            <div className="mt-4 flex items-center justify-between border-t border-line pt-4">
+              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-mist-500">Theme</span>
+              <ThemeToggle />
             </div>
           </motion.div>
         ) : null}

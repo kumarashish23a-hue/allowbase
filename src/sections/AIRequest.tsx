@@ -103,7 +103,7 @@ export function AIRequest({ onSimulate }: AIRequestProps) {
           <button
             type="button"
             onClick={onSimulate}
-            className="inline-flex items-center gap-2 rounded-xl bg-accent-500 px-6 py-3.5 text-sm font-semibold text-[#06202a] shadow-card transition hover:bg-accent-400"
+            className="inline-flex items-center gap-2 rounded-xl bg-accent-500 px-6 py-3.5 text-sm font-semibold text-accent-ink shadow-card transition hover:bg-accent-400"
           >
             <FlaskConical size={16} /> Simulate AI Request
           </button>

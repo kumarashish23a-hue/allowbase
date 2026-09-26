@@ -16,6 +16,15 @@
       content="Data Control Plane is the control layer for discovering, governing, monitoring, and securing how AI systems access your organization's data."
     />
     <title>Data Control Plane — Control what AI can see</title>
+    <script>
+      // Apply the saved theme before first paint to avoid a flash of the wrong theme.
+      try {
+        var saved = localStorage.getItem('dcp-theme');
+        var theme = saved === 'dark' || saved === 'negative' ? saved : 'light';
+        document.documentElement.classList.add(theme);
+        document.documentElement.style.colorScheme = theme === 'light' ? 'light' : 'dark';
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

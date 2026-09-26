@@ -33,7 +33,7 @@ export function FinalCta({ onDemo }: FinalCtaProps) {
               <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
                 <a
                   href="#platform"
-                  className="btn-primary inline-flex w-full items-center justify-center gap-2 rounded-xl bg-accent-500 px-6 py-3.5 text-sm font-semibold text-[#06202a] transition hover:bg-accent-400 sm:w-auto"
+                  className="btn-primary inline-flex w-full items-center justify-center gap-2 rounded-xl bg-accent-500 px-6 py-3.5 text-sm font-semibold text-accent-ink transition hover:bg-accent-400 sm:w-auto"
                 >
                   Get Started <ArrowRight size={16} />
                 </a>

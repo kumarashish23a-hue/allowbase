@@ -6,16 +6,26 @@ interface VantaNetInstance {
 
 /**
  * Interactive Vanta.js NET backdrop: a living network of nodes and links
- * that reacts to the cursor. Customized for the light theme — cyan net on
- * the page background, airy spacing, faded out toward the bottom so content
- * below the hero fold stays clean.
+ * that reacts to the cursor. Customized per theme — the net color and canvas
+ * background follow the active theme, airy spacing, faded out toward the
+ * bottom so content below the hero fold stays clean.
  *
  * The heavy three.js/vanta code is dynamically imported so it never blocks
  * or breaks the initial page load: if WebGL is unavailable or the import
  * fails, the static background simply remains. Disabled for reduced-motion
  * and touch pointers.
  */
-export function VantaNet({ className = '' }: { className?: string }) {
+export function VantaNet({
+  className = '',
+  backgroundColor = 0xedf1f7,
+  color = 0x06b6d4,
+}: {
+  className?: string;
+  /** Page background the canvas blends into (three.js hex). */
+  backgroundColor?: number;
+  /** Network line/dot color (three.js hex). */
+  color?: number;
+}) {
   const hostRef = useRef<HTMLDivElement>(null);
   const vantaRef = useRef<VantaNetInstance | null>(null);
 
@@ -55,8 +65,8 @@ export function VantaNet({ className = '' }: { className?: string }) {
           minWidth: 200.0,
           scale: 1.0,
           scaleMobile: 1.0,
-          backgroundColor: 0xedf1f7,
-          color: 0x06b6d4,
+          backgroundColor,
+          color,
           points: 9.0,
           maxDistance: 26.0,
           spacing: 22.0,

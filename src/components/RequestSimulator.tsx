@@ -149,7 +149,7 @@ export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
             type="button"
             onClick={evaluate}
             disabled={running}
-            className="mt-6 w-full rounded-xl bg-accent-500 px-4 py-3 text-sm font-semibold text-[#06202a] transition hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-6 w-full rounded-xl bg-accent-500 px-4 py-3 text-sm font-semibold text-accent-ink transition hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {running ? 'Evaluating…' : 'Evaluate request'}
           </button>

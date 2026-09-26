@@ -258,7 +258,7 @@ export function ProfileModal({ open, onClose, onOpenSetup }: ProfileModalProps) 
                 type="button"
                 disabled={saving}
                 onClick={() => void saveProfile()}
-                className="inline-flex items-center gap-2 rounded-xl bg-accent-500 px-4 py-2.5 text-sm font-semibold text-[#06202a] transition hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-xl bg-accent-500 px-4 py-2.5 text-sm font-semibold text-accent-ink transition hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
                 {saving ? 'Saving…' : 'Save changes'}
@@ -322,7 +322,7 @@ export function ProfileModal({ open, onClose, onOpenSetup }: ProfileModalProps) 
                     type="button"
                     disabled={creatingOrg}
                     onClick={() => void handleCreateOrg()}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent-500 px-4 py-2.5 text-sm font-semibold text-[#06202a] transition hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent-500 px-4 py-2.5 text-sm font-semibold text-accent-ink transition hover:bg-accent-400 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {creatingOrg ? <Loader2 size={15} className="animate-spin" /> : <Building2 size={15} />}
                     {creatingOrg ? 'Creating…' : 'Create organization'}
