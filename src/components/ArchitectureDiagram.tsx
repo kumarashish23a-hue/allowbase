@@ -84,7 +84,7 @@ export function ArchitectureDiagram() {
 
   return (
     <div className="relative overflow-hidden rounded-3xl border border-line bg-ink-900/70 shadow-panel">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(700px_320px_at_50%_0%,rgba(79,124,255,0.18),transparent_70%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(700px_320px_at_50%_0%,rgba(24,153,242,0.2),transparent_70%)]" />
       <div className="relative grid gap-6 p-6 sm:p-8 lg:grid-cols-[1fr_1.25fr_1fr] lg:p-10">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-mist-500">Company Data</p>
