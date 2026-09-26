@@ -13,11 +13,17 @@ interface ModalProps {
 
 export function Modal({ open, title, subtitle, onClose, children, wide = false }: ModalProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  // onClose is usually an inline closure that changes every render; keep it in
+  // a ref so the effect below only runs when `open` changes. Otherwise every
+  // keystroke in a form field would re-run the effect and steal focus back to
+  // the close button, making inputs unusable.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') onCloseRef.current();
     };
     document.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
@@ -26,7 +32,7 @@ export function Modal({ open, title, subtitle, onClose, children, wide = false }
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = '';
     };
-  }, [open, onClose]);
+  }, [open]);
 
   return (
     <AnimatePresence>
