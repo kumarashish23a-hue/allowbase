@@ -1,4 +1,5 @@
 import { Check } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Reveal } from '../components/Reveal';
 import { SectionHeading } from '../components/SectionHeading';
 import { pricingTiers } from '../data/mock';
@@ -46,12 +47,12 @@ export function Pricing({ onDemo }: PricingProps) {
                     {tier.cta}
                   </button>
                 ) : (
-                  <a
-                    href="#get-started"
+                  <Link
+                    to="/app"
                     className="block w-full rounded-xl border border-line bg-ink-950/60 px-4 py-3 text-center text-sm font-semibold text-mist-100 transition hover:border-line-strong"
                   >
                     {tier.cta}
-                  </a>
+                  </Link>
                 )}
               </div>
             </div>

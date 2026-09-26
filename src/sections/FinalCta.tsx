@@ -1,4 +1,5 @@
 import { ArrowRight, Check, FlaskConical } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Reveal } from '../components/Reveal';
 
 interface FinalCtaProps {
@@ -31,12 +32,12 @@ export function FinalCta({ onDemo }: FinalCtaProps) {
                 ))}
               </ul>
               <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-                <a
-                  href="#platform"
+                <Link
+                  to="/app"
                   className="btn-primary inline-flex w-full items-center justify-center gap-2 rounded-xl bg-accent-500 px-6 py-3.5 text-sm font-semibold text-accent-ink transition hover:bg-accent-400 sm:w-auto"
                 >
                   Get Started <ArrowRight size={16} />
-                </a>
+                </Link>
                 <button
                   type="button"
                   onClick={onDemo}

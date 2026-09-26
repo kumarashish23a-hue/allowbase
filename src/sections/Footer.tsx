@@ -1,38 +1,38 @@
 import { ShieldCheck } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const columns: { title: string; links: { label: string; href: string }[] }[] = [
   {
     title: 'Product',
     links: [
-      { label: 'Platform', href: '#platform' },
-      { label: 'Policy Engine', href: '#platform' },
-      { label: 'AI Agents', href: '#platform' },
-      { label: 'Pricing', href: '#pricing' },
+      { label: 'Live console', href: '/app' },
+      { label: 'API keys', href: '/app#api-keys' },
+      { label: 'Request log', href: '/app#requests' },
+      { label: 'Pricing', href: '/#pricing' },
     ],
   },
   {
     title: 'Solutions',
     links: [
-      { label: 'Enterprise AI', href: '#solutions' },
-      { label: 'AI Agents', href: '#solutions' },
-      { label: 'Data Security', href: '#solutions' },
-      { label: 'Regulated Organizations', href: '#solutions' },
+      { label: 'Enterprise AI', href: '/#solutions' },
+      { label: 'AI Agents', href: '/#solutions' },
+      { label: 'Data Security', href: '/#solutions' },
+      { label: 'Regulated Organizations', href: '/#solutions' },
     ],
   },
   {
     title: 'Developers',
     links: [
-      { label: 'API Concept', href: '#developers' },
-      { label: 'Architecture', href: '#developers' },
-      { label: 'Security', href: '#security' },
+      { label: 'API docs', href: '/#developers' },
+      { label: 'How it works', href: '/#how' },
+      { label: 'Security', href: '/#security' },
     ],
   },
   {
     title: 'Company',
     links: [
-      { label: 'About', href: '#top' },
-      { label: 'Careers', href: '#top' },
-      { label: 'Contact', href: '#get-started' },
+      { label: 'About', href: '/#top' },
+      { label: 'Contact', href: '/#get-started' },
     ],
   },
 ];
@@ -56,9 +56,9 @@ export function Footer() {
             </p>
             <p className="mt-4 max-w-xs text-xs leading-relaxed text-mist-600">
               Security model:{' '}
-              <a href="#security" className="text-mist-500 underline decoration-line-strong underline-offset-2 transition hover:text-mist-200">
+              <Link to="/#security" className="text-mist-500 underline decoration-line-strong underline-offset-2 transition hover:text-mist-200">
                 metadata-only discovery, deterministic policy, deny-by-default enforcement
-              </a>
+              </Link>
               .
             </p>
             <p className="mt-3 text-xs text-mist-600">Frontend prototype. All data shown is simulated.</p>
@@ -70,9 +70,9 @@ export function Footer() {
                 <ul className="mt-4 space-y-2.5">
                   {column.links.map((link) => (
                     <li key={`${column.title}-${link.label}`}>
-                      <a href={link.href} className="text-sm text-mist-400 transition hover:text-mist-100">
+                      <Link to={link.href} className="text-sm text-mist-400 transition hover:text-mist-100">
                         {link.label}
-                      </a>
+                      </Link>
                     </li>
                   ))}
                 </ul>
@@ -84,13 +84,13 @@ export function Footer() {
           <p className="text-xs text-mist-600">© 2026 Data Control Plane. Prototype concept.</p>
           <div className="flex gap-6">
             {[
-              { label: 'Privacy', href: '#top' },
-              { label: 'Terms', href: '#top' },
-              { label: 'Security', href: '#security' },
+              { label: 'Privacy', href: '/#top' },
+              { label: 'Terms', href: '/#top' },
+              { label: 'Security', href: '/#security' },
             ].map((link) => (
-              <a key={link.label} href={link.href} className="text-xs text-mist-500 transition hover:text-mist-200">
+              <Link key={link.label} to={link.href} className="text-xs text-mist-500 transition hover:text-mist-200">
                 {link.label}
-              </a>
+              </Link>
             ))}
           </div>
         </div>

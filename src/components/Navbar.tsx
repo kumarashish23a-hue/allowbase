@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import { Menu, ShieldCheck, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { navItems } from '../data/mock';
@@ -71,36 +72,36 @@ export function Navbar({ onSignIn, onProfile }: NavbarProps) {
       }`}
     >
       <nav aria-label="Primary" className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <a href="#top" className="flex items-center gap-2.5">
+        <Link to="/" className="flex items-center gap-2.5" aria-label="Data Control Plane home">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-ink-800">
             <ShieldCheck size={16} className="text-accent-600" />
           </span>
           <span className="text-[12px] font-bold uppercase tracking-[0.16em] text-mist-100">
             Data Control Plane
           </span>
-        </a>
+        </Link>
 
         <div className="hidden items-center gap-1 lg:flex">
           {navItems.map((item) => (
-            <a
+            <Link
               key={item.href}
-              href={item.href}
+              to={item.href}
               className="rounded-lg px-3 py-2 text-sm text-mist-400 transition hover:bg-ink-800 hover:text-mist-100"
             >
               {item.label}
-            </a>
+            </Link>
           ))}
         </div>
 
         <div className="hidden items-center gap-3 lg:flex">
           <ThemeToggle />
           {authButton}
-          <a
-            href="#get-started"
+          <Link
+            to="/app"
             className="btn-primary rounded-lg bg-accent-500 px-4 py-2 text-sm font-semibold text-accent-ink transition hover:bg-accent-400"
           >
             Get Started
-          </a>
+          </Link>
         </div>
 
         <button
@@ -125,14 +126,14 @@ export function Navbar({ onSignIn, onProfile }: NavbarProps) {
           >
             <div className="flex flex-col gap-1">
               {navItems.map((item) => (
-                <a
+                <Link
                   key={item.href}
-                  href={item.href}
+                  to={item.href}
                   onClick={() => setOpen(false)}
                   className="rounded-lg px-3 py-3 text-base text-mist-200 transition hover:bg-ink-800 hover:text-mist-100"
                 >
                   {item.label}
-                </a>
+                </Link>
               ))}
             </div>
             <div className="mt-4 flex gap-3">
@@ -162,13 +163,13 @@ export function Navbar({ onSignIn, onProfile }: NavbarProps) {
                   Sign In
                 </button>
               )}
-              <a
-                href="#get-started"
+              <Link
+                to="/app"
                 onClick={() => setOpen(false)}
                 className="flex-1 rounded-lg bg-accent-500 px-4 py-3 text-center text-sm font-semibold text-accent-ink"
               >
                 Get Started
-              </a>
+              </Link>
             </div>
             <div className="mt-4 flex items-center justify-between border-t border-line pt-4">
               <span className="text-xs font-semibold uppercase tracking-[0.18em] text-mist-500">Theme</span>

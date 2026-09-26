@@ -70,6 +70,11 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Anchored sections clear the fixed navbar. */
+[id] {
+  scroll-margin-top: 4.5rem;
+}
+
 /* ------------------------------------------------------------------ */
 /* Themes: every component is token-driven, so switching themes is    */
 /* just a matter of overriding the design tokens below.               */

@@ -19,12 +19,11 @@ import type {
 } from '../types';
 
 export const navItems: NavItem[] = [
-  { label: 'Product', href: '#platform' },
-  { label: 'Solutions', href: '#solutions' },
-  { label: 'How It Works', href: '#how' },
-  { label: 'Developers', href: '#developers' },
-  { label: 'Security', href: '#security' },
-  { label: 'Pricing', href: '#pricing' },
+  { label: 'Console', href: '/app' },
+  { label: 'How It Works', href: '/#how' },
+  { label: 'Developers', href: '/#developers' },
+  { label: 'Security', href: '/#security' },
+  { label: 'Pricing', href: '/#pricing' },
 ];
 
 export const aiStack = ['GPT', 'Claude', 'Gemini', 'Llama', 'Internal AI', 'AI Agents'];

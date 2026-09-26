@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { ArrowRight, Check, Play } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { ArchitectureDiagram } from '../components/ArchitectureDiagram';
 import { DashboardPreview } from '../components/DashboardPreview';
 import { Reveal } from '../components/Reveal';
@@ -40,18 +41,18 @@ export function Hero() {
             organization's data.
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <a
-              href="#get-started"
+            <Link
+              to="/app"
               className="btn-primary inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent-500 px-6 py-3.5 text-sm font-semibold text-accent-ink transition hover:bg-accent-400 sm:w-auto"
             >
               Get Started <ArrowRight size={16} />
-            </a>
-            <a
-              href="#platform"
+            </Link>
+            <Link
+              to="/app"
               className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-line bg-ink-900/60 px-6 py-3.5 text-sm font-semibold text-mist-100 transition hover:border-line-strong hover:bg-ink-800 sm:w-auto"
             >
-              <Play size={16} /> Explore Platform
-            </a>
+              <Play size={16} /> Explore the console
+            </Link>
           </div>
           <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
             {heroAssurances.map((assurance) => (

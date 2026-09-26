@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Activity,
   ArrowLeft,
@@ -74,6 +75,7 @@ function firstIncompleteOf(status: SetupStatus): number {
 }
 
 export function SetupModal({ open, onClose, onSignIn, onTrySimulator }: SetupModalProps) {
+  const navigate = useNavigate();
   const [status, setStatus] = useState<SetupStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [stepIndex, setStepIndex] = useState(0);
@@ -171,10 +173,7 @@ export function SetupModal({ open, onClose, onSignIn, onTrySimulator }: SetupMod
 
   const goToApiKeys = () => {
     onClose();
-    // Let the modal finish closing before scrolling.
-    window.setTimeout(() => {
-      document.getElementById('api-keys')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 150);
+    navigate('/app#api-keys');
   };
 
   const doneFlags = status ? stepDoneFlags(status) : [];

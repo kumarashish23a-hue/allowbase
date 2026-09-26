@@ -1,4 +1,5 @@
 import { Check, Copy } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { Reveal } from '../components/Reveal';
 import { SectionHeading } from '../components/SectionHeading';
@@ -86,7 +87,7 @@ export function Developers() {
             <p className="text-xs text-mist-600">
               Live endpoint. Check-mode: only call the model when <span className="font-mono">decision</span> is{' '}
               <span className="font-mono">allow</span>; treat <span className="font-mono">require_approval</span> as a
-              pause for a human. <a href="#api-keys" className="underline hover:text-mist-400">Get an API key</a>.
+              pause for a human. <Link to="/app#api-keys" className="underline hover:text-mist-400">Get an API key</Link>.
             </p>
           </div>
         </Reveal>

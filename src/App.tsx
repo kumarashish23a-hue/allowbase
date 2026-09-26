@@ -1,24 +1,9 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
-import { Agents } from './sections/Agents';
-import { AIRequest } from './sections/AIRequest';
-import { Approvals } from './sections/Approvals';
-import { ApiKeys } from './sections/ApiKeys';
-import { DataSources } from './sections/DataSources';
-import { Developers } from './sections/Developers';
-import { Faq } from './sections/Faq';
-import { FinalCta } from './sections/FinalCta';
 import { Footer } from './sections/Footer';
-import { Hero } from './sections/Hero';
-import { HowItWorks } from './sections/HowItWorks';
-import { TrustPrinciples } from './sections/TrustPrinciples';
-import { Platform } from './sections/Platform';
-import { Requests } from './sections/Requests';
-import { PolicyEngine } from './sections/PolicyEngine';
-import { Pricing } from './sections/Pricing';
-import { Problem } from './sections/Problem';
-import { Security } from './sections/Security';
-import { UseCases } from './sections/UseCases';
+import { Home } from './pages/Home';
+import { Console } from './pages/Console';
 import { getActiveOrganization } from './services/organizationService';
 import { getSetupStatus } from './services/setupService';
 import { ThemeProvider } from './theme';
@@ -30,6 +15,23 @@ const RequestSimulator = lazy(() =>
 );
 const SetupModal = lazy(() => import('./components/SetupModal').then((m) => ({ default: m.SetupModal })));
 const SignInModal = lazy(() => import('./components/SignInModal').then((m) => ({ default: m.SignInModal })));
+
+/** Scrolls to top on page change, or to the anchored section for #hash links. */
+function ScrollManager() {
+  const { pathname, hash } = useLocation();
+  useEffect(() => {
+    if (hash) {
+      const id = hash.replace('#', '');
+      // Wait a tick so the new page has rendered.
+      const timer = window.setTimeout(() => {
+        document.getElementById(id)?.scrollIntoView();
+      }, 50);
+      return () => window.clearTimeout(timer);
+    }
+    window.scrollTo(0, 0);
+  }, [pathname, hash ]);
+  return null;
+}
 
 function App() {
   const [simulatorOpen, setSimulatorOpen] = useState(false);
@@ -72,47 +74,37 @@ function App() {
 
   return (
     <ThemeProvider>
-      <div className="min-h-screen">
-      <a
-        href="#platform"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-accent-500 focus:px-4 focus:py-2 focus:text-sm focus:text-accent-ink"
-      >
-        Skip to content
-      </a>
-      <Navbar onSignIn={() => setSignInOpen(true)} onProfile={() => setProfileOpen(true)} />
-      <main>
-        <Hero />
-        <Problem />
-        <HowItWorks />
-        <TrustPrinciples />
-        <Platform />
-        <AIRequest onSimulate={openSimulator} />
-        <PolicyEngine />
-        <Approvals />
-        <Agents />
-        <DataSources />
-        <Security />
-        <Developers />
-        <ApiKeys />
-        <Requests />
-        <UseCases />
-        <Pricing onDemo={openSimulator} />
-        <Faq />
-        <FinalCta onDemo={openSimulator} />
-      </main>
-      <Footer />
-      <Suspense fallback={null}>
-        <RequestSimulator open={simulatorOpen} onClose={() => setSimulatorOpen(false)} />
-        <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} onAuthSuccess={() => void handleAuthSuccess()} />
-        <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} onOpenSetup={() => setSetupOpen(true)} />
-        <SetupModal
-          open={setupOpen}
-          onClose={() => setSetupOpen(false)}
-          onSignIn={() => setSignInOpen(true)}
-          onTrySimulator={openSimulator}
-        />
-      </Suspense>
-      </div>
+      <BrowserRouter>
+        <ScrollManager />
+        <div className="min-h-screen">
+          <a
+            href="#main"
+            className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-accent-500 focus:px-4 focus:py-2 focus:text-sm focus:text-accent-ink"
+          >
+            Skip to content
+          </a>
+          <Navbar onSignIn={() => setSignInOpen(true)} onProfile={() => setProfileOpen(true)} />
+          <main id="main">
+            <Routes>
+              <Route path="/" element={<Home onDemo={openSimulator} />} />
+              <Route path="/app" element={<Console onSimulate={openSimulator} />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </main>
+          <Footer />
+          <Suspense fallback={null}>
+            <RequestSimulator open={simulatorOpen} onClose={() => setSimulatorOpen(false)} />
+            <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} onAuthSuccess={() => void handleAuthSuccess()} />
+            <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} onOpenSetup={() => setSetupOpen(true)} />
+            <SetupModal
+              open={setupOpen}
+              onClose={() => setSetupOpen(false)}
+              onSignIn={() => setSignInOpen(true)}
+              onTrySimulator={openSimulator}
+            />
+          </Suspense>
+        </div>
+      </BrowserRouter>
     </ThemeProvider>
   );
 }
