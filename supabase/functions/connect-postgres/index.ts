@@ -35,7 +35,7 @@ interface ConnectPayload {
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const HOST_RE = /^[a-zA-Z0-9.-]{1,253}$/;
-const IDENT_RE = /^[a-zA-Z0-9_-]{1,63}$/;
+const IDENT_RE = /^[a-zA-Z0-9_.-]{1,63}$/;
 const CONNECT_TIMEOUT_MS = 15000;
 
 function badRequest(message: string): Response {
