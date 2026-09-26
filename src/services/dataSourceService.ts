@@ -30,6 +30,9 @@ export interface DiscoverySummary {
   updated: number;
   truncated: boolean;
   discovered_at: string;
+  findings?: number;
+  columns_need_review?: number;
+  classifier?: string;
 }
 
 /** Invoke an Edge Function with the active org id and surface its error message. */
@@ -101,6 +104,69 @@ export async function listDiscoveredAssets(sourceId: string): Promise<DataAssetR
     .order('name');
   if (error) throw new Error('Could not load the discovered catalog.');
   return (data ?? []) as DataAssetRow[];
+}
+
+export interface ClassifyInput {
+  sourceId?: string;
+  assetId?: string;
+  overrides?: Array<{ column_name: string; classification: string }>;
+}
+
+export interface ClassifySummary {
+  assets_processed: number;
+  columns_classified: number;
+  columns_need_review: number;
+  findings: number;
+  classifier: string;
+  classified_at: string;
+}
+
+/**
+ * Re-run the deterministic classifier over catalog assets (one asset, one
+ * source, or everything when no scope is given). Optional overrides apply
+ * manual column labels; the user's labels are never overwritten otherwise.
+ */
+export async function classifyAssets(input: ClassifyInput): Promise<ClassifySummary> {
+  const body: Record<string, unknown> = {};
+  if (input.sourceId) body.source_id = input.sourceId;
+  if (input.assetId) body.asset_id = input.assetId;
+  if (input.overrides) body.overrides = input.overrides;
+  return invokeFunction<ClassifySummary>('classify-assets', body);
+}
+
+export interface ClassificationFinding {
+  id: string;
+  data_asset_id: string;
+  asset_name: string;
+  finding_type: string;
+  severity: string;
+  description: string;
+  field_name: string | null;
+  status: string;
+  created_at: string;
+}
+
+/** Open classification findings for a source's discovered assets. */
+export async function listOpenFindings(sourceId: string): Promise<ClassificationFinding[]> {
+  const supabase = getSupabase();
+  const orgId = await getActiveOrganizationId();
+  if (!supabase || !orgId) return [];
+  const assets = await listDiscoveredAssets(sourceId);
+  if (assets.length === 0) return [];
+  const nameById = new Map(assets.map((a) => [a.id, a.name]));
+  const { data, error } = await supabase
+    .from('sensitive_data_findings')
+    .select('id,data_asset_id,finding_type,severity,description,field_name,status,created_at')
+    .eq('organization_id', orgId)
+    .in('data_asset_id', assets.map((a) => a.id))
+    .eq('status', 'open')
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (error) throw new Error('Could not load classification findings.');
+  return ((data ?? []) as Array<Omit<ClassificationFinding, 'asset_name'>>).map((f) => ({
+    ...f,
+    asset_name: nameById.get(f.data_asset_id) ?? 'Unknown table',
+  }));
 }
 
 const typeCategory: Record<string, string> = {

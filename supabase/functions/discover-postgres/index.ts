@@ -11,14 +11,24 @@
 //   data is ever selected or persisted. The session is set read-only as
 //   defense in depth.
 // - Discovered tables are upserted into data_assets (asset_type 'table') with
-//   their columns in metadata. Re-discovery preserves any classification or
-//   sensitivity labels the user already set.
+//   their columns in metadata. Every column is classified by the deterministic
+//   rules engine (pattern/semantic-name rules); low-confidence or unmatched
+//   columns are flagged for human review. Re-discovery preserves any
+//   classification labels the user already set manually.
+// - Sensitive columns produce open findings in sensitive_data_findings.
 //
 // Deploy: supabase functions deploy discover-postgres
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
 import { Client } from 'https://deno.land/x/postgres@v0.17.0/mod.ts';
+import {
+  CLASSIFIER_VERSION,
+  classifyColumn,
+  rollupAsset,
+} from '../_shared/classify.ts';
+import type { ClassifiedColumn } from '../_shared/classify.ts';
+import { refreshFindings } from '../_shared/findings.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -261,7 +271,7 @@ serve(async (req: Request): Promise<Response> => {
 
   const { data: existingAssets, error: existingError } = await supabase
     .from('data_assets')
-    .select('id,name,classification,sensitivity_level')
+    .select('id,name,classification,sensitivity_level,metadata')
     .eq('organization_id', organization_id)
     .eq('data_source_id', source_id);
   if (existingError) {
@@ -273,18 +283,84 @@ serve(async (req: Request): Promise<Response> => {
   const existingByName = new Map(
     ((existingAssets ?? []) as { id: string; name: string }[]).map((a) => [a.name, a.id]),
   );
+  const existingMetaByName = new Map(
+    ((existingAssets ?? []) as { name: string; metadata: unknown }[]).map((a) => [a.name, a.metadata]),
+  );
 
-  const discoveredAt = new Date().toISOString();
-  let inserted = 0;
-  let updated = 0;
-  for (const table of tables) {
-    const key = `${table.table_schema}.${table.table_name}`;
-    const tableColumns = (columnsByTable.get(key) ?? []).map((c) => ({
+  // Classify one column with the deterministic rules engine. A column the user
+  // already labeled manually keeps the user's verdict; everything else is
+  // re-evaluated. Unknown columns are flagged for human review, never guessed.
+  function classifyDiscoveredColumn(
+    c: ColumnRow,
+    manualByName: Map<string, ClassifiedColumn>,
+  ): ClassifiedColumn {
+    const base = {
       name: c.column_name,
       type: c.data_type,
       nullable: c.is_nullable === 'YES',
       position: c.ordinal_position,
-    }));
+    };
+    const manual = manualByName.get(c.column_name);
+    if (manual) return { ...base, ...pickVerdict(manual), classified_by: 'manual' };
+    const verdict = classifyColumn(c.column_name);
+    if (!verdict) {
+      return {
+        ...base,
+        classification: 'internal',
+        sensitivity: 'none',
+        confidence: null,
+        rule: null,
+        category: null,
+        needs_review: true,
+        classified_by: CLASSIFIER_VERSION,
+      };
+    }
+    return {
+      ...base,
+      classification: verdict.classification,
+      sensitivity: verdict.sensitivity,
+      confidence: verdict.confidence,
+      rule: verdict.rule,
+      category: verdict.category,
+      needs_review: verdict.needs_review,
+      classified_by: CLASSIFIER_VERSION,
+    };
+  }
+
+  function pickVerdict(manual: ClassifiedColumn): Omit<ClassifiedColumn, 'name' | 'type' | 'nullable' | 'position' | 'classified_by'> {
+    return {
+      classification: manual.classification,
+      sensitivity: manual.sensitivity,
+      confidence: manual.confidence,
+      rule: manual.rule,
+      category: manual.category,
+      needs_review: manual.needs_review,
+    };
+  }
+
+  const discoveredAt = new Date().toISOString();
+  let inserted = 0;
+  let updated = 0;
+  let findingsWritten = 0;
+  let columnsNeedReview = 0;
+  for (const table of tables) {
+    const key = `${table.table_schema}.${table.table_name}`;
+    const rawColumns = columnsByTable.get(key) ?? [];
+
+    // Manual column labels survive re-discovery.
+    const manualByName = new Map<string, ClassifiedColumn>();
+    const existingMeta = existingMetaByName.get(key) as { columns?: unknown; classification_source?: string } | undefined;
+    if (existingMeta && Array.isArray(existingMeta.columns)) {
+      for (const col of existingMeta.columns as ClassifiedColumn[]) {
+        if (col && typeof col.name === 'string' && col.classified_by === 'manual') {
+          manualByName.set(col.name, col);
+        }
+      }
+    }
+
+    const tableColumns = rawColumns.map((c) => classifyDiscoveredColumn(c, manualByName));
+    columnsNeedReview += tableColumns.filter((c) => c.needs_review).length;
+    const rollup = rollupAsset(tableColumns, { classification: 'internal', sensitivity: 'none' });
     const metadata = {
       schema: table.table_schema,
       table: table.table_name,
@@ -294,12 +370,24 @@ serve(async (req: Request): Promise<Response> => {
       row_estimate: rowEstimates.has(key) ? rowEstimates.get(key) : null,
       discovered_at: discoveredAt,
       discovered_by: 'postgres-connector',
+      classification_source: CLASSIFIER_VERSION,
+      classified_at: discoveredAt,
+      columns_need_review: tableColumns.filter((c) => c.needs_review).length,
     };
     const existingId = existingByName.get(key);
+    let assetId: string | undefined;
     if (existingId) {
+      // Re-discovery refreshes structure and classification, but an asset the
+      // user labeled manually at asset level keeps the user's labels.
+      const assetLevelManual = existingMeta?.classification_source === 'manual';
+      const patch: Record<string, unknown> = { metadata, last_scanned_at: discoveredAt };
+      if (!assetLevelManual) {
+        patch.classification = rollup.classification;
+        patch.sensitivity_level = rollup.sensitivity;
+      }
       const { error: updateError } = await supabase
         .from('data_assets')
-        .update({ metadata, last_scanned_at: discoveredAt })
+        .update(patch)
         .eq('id', existingId);
       if (updateError) {
         return new Response(
@@ -307,25 +395,41 @@ serve(async (req: Request): Promise<Response> => {
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
       }
+      assetId = existingId;
       updated += 1;
     } else {
-      const { error: insertError } = await supabase.from('data_assets').insert({
-        organization_id,
-        data_source_id: source_id,
-        name: key,
-        asset_type: 'table',
-        classification: 'internal',
-        sensitivity_level: 'none',
-        metadata,
-        last_scanned_at: discoveredAt,
-      });
+      const { data: insertedRow, error: insertError } = await supabase
+        .from('data_assets')
+        .insert({
+          organization_id,
+          data_source_id: source_id,
+          name: key,
+          asset_type: 'table',
+          classification: rollup.classification,
+          sensitivity_level: rollup.sensitivity,
+          metadata,
+          last_scanned_at: discoveredAt,
+        })
+        .select('id')
+        .single();
       if (insertError) {
         return new Response(
           JSON.stringify({ error: `Could not add the catalog entry for ${key}.` }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
         );
       }
+      assetId = (insertedRow as { id: string }).id;
       inserted += 1;
+    }
+
+    // Refresh this classifier's open findings for the asset.
+    try {
+      findingsWritten += await refreshFindings(supabase, organization_id, assetId as string, key, tableColumns);
+    } catch (e) {
+      return new Response(
+        JSON.stringify({ error: e instanceof Error ? e.message : 'Could not record findings.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
     }
   }
 
@@ -356,6 +460,9 @@ serve(async (req: Request): Promise<Response> => {
       inserted,
       updated,
       truncated: tables.length >= MAX_TABLES,
+      findings: findingsWritten,
+      columns_need_review: columnsNeedReview,
+      classifier: CLASSIFIER_VERSION,
       discovered_at: discoveredAt,
     }),
     { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },

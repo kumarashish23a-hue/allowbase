@@ -148,15 +148,20 @@ Environment: exactly two public variables — `VITE_SUPABASE_URL`, `VITE_SUPABAS
 4. Each discovered object becomes a `data_assets` row: name, location, type, owner, tags — **metadata only, never row contents**.
 5. New/changed assets raise events → classification → policy review → alerts.
 
-### What exists today (updated: Phase 2, 2026-09-26)
+### What exists today (updated: Phase 2b classification, 2026-09-26)
 
 - `data_sources` table: `{ name, type, status, metadata (jsonb), last_scan_at }`. `type = 'postgresql'` and `status = 'connected'` are real states now, not just labels.
 - **Real PostgreSQL connector** — two Edge Functions, no new migrations needed:
   - `connect-postgres`: validates JWT + owner/admin/security role, tests the connection over TLS (15s timeout), saves **only** non-secret config (`host, port, database, username`) in `data_sources.metadata`. The password is used once, in memory, never stored/logged/returned.
-  - `discover-postgres`: takes `{ source_id, password }`, sets the session read-only (`default_transaction_read_only = on`), reads `information_schema.tables` + `information_schema.columns` (+ best-effort `pg_stat_user_tables` row estimates), and upserts one `data_assets` row per table (`asset_type = 'table'`, columns in `metadata`, `last_scanned_at` updated). Re-discovery **preserves** user-set `classification` / `sensitivity_level`. No row data is ever selected or persisted.
-- The Data Sources section shows **Live** badges for connected databases, with per-source **Discover** (password per run, never stored) and **View catalog** (expandable table → column browser). Everything else keeps its honest **Mock** badge.
-- Verified with `scripts/verify-discovery.mjs`: the exact discovery queries run against in-memory Postgres — tables, views, column mapping, system-schema exclusion, and row estimates all asserted.
-- Still missing: OAuth connectors (Drive/GitHub/Slack/…), background/scheduled discovery workers, automatic classification of discovered columns (deterministic rules — the planned Phase 2b), and `sensitive_data_findings` writers.
+  - `discover-postgres`: takes `{ source_id, password }`, sets the session read-only (`default_transaction_read_only = on`), reads `information_schema.tables` + `information_schema.columns` (+ best-effort `pg_stat_user_tables` row estimates), and upserts one `data_assets` row per table (`asset_type = 'table'`, columns in `metadata`, `last_scanned_at` updated). Re-discovery **preserves** manually labeled columns. No row data is ever selected or persisted.
+- **Deterministic classification engine** (blueprint step 6) — `supabase/functions/_shared/classify.ts`, pure TypeScript with zero dependencies:
+  - Normalizes column names (`userEmail`, `EMAIL-ADDRESS`, `"e-mail"` → one form), then applies ordered pattern/semantic rules: credentials → `restricted/critical`, card numbers/CVV/IBAN → `restricted/critical`, PII (email, phone, SSN, names, DOB, address, IP) → `confidential/high`, financial amounts → `confidential/high`, health → `restricted/high`, linkable IDs → `internal/medium`, timestamps/flags → `internal/low|none`.
+  - Every verdict carries `{ classification, sensitivity, confidence, rule, category, needs_review }`. Confidence below 0.8 — or no rule match — flags the column for **human review** instead of guessing. Specific rules precede general ones (`card_token` is financial, never a credential).
+  - Asset labels roll up from columns (max severity). Findings land in `sensitive_data_findings` (`finding_type` ∈ pii/financial/credential/healthcare/confidential, `severity` high/critical, `field_name` = column); only the classifier's own **open** findings are refreshed — human-resolved/ignored findings are never touched.
+- **Classification entry points**: `discover-postgres` classifies on every discovery; new `classify-assets` Edge Function re-runs classification on demand (asset / source / org scope) and applies manual column overrides (`classified_by: 'manual'` — the user always wins). JWT + owner/admin/security role on both.
+- The Data Sources section shows **Live** badges for connected databases, with per-source **Discover** (password per run, never stored) and **View catalog**: expandable table → column browser with per-column classification chips, confidence, review badges, a **Label…** dropdown for manual override, **Re-run classification**, and the open findings list.
+- Verified with `scripts/verify-classify.mjs` (49 assertions: normalization, rule ordering, word-boundary safety, rollup, findings mapping against the DB check constraints) and `scripts/verify-discovery.mjs`.
+- Still missing: OAuth connectors (Drive/GitHub/Slack/…), background/scheduled discovery workers, event ingestion pipeline, and the real enforcement point (API keys + gateway — blueprint steps 8–9).
 
 ### The metadata-vs-data rule (architectural principle)
 
@@ -308,8 +313,8 @@ Enforcement is **database-level, never frontend filtering**: RLS policies call `
 
 ## 11. Missing components (honest list)
 
-1. **Discovery connectors** — no OAuth, no credential vault, no scanner workers for Postgres/MySQL/S3/SaaS/APIs. Sources are hand-typed labels.
-2. **Automated classification** — sensitivity is a manual dropdown; no PII/secret scanner, no ML-assisted labeling queue.
+1. **Discovery connectors** — PostgreSQL is real (connect + discover + classify). Still no OAuth, no credential vault, no scanner workers for MySQL/S3/SaaS/APIs.
+2. **Automated classification** — deterministic rule engine is live for discovered PostgreSQL columns (pattern/semantic rules, confidence + human-review queue, manual override, findings). No ML-assisted suggestions yet, and hand-created assets still use the manual dropdown.
 3. **Event ingestion** — no `access_events` table, no streaming pipeline; the only "events" are rows created by the evaluation RPC itself.
 4. **Alert delivery** — `risk_events` rows exist but nothing notifies anyone (no email/webhook/Slack).
 5. **Approval workflows** — `review` is a terminal label; no queue, no approver UX, no `require_approval` action.

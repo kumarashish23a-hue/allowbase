@@ -6,10 +6,14 @@ import { connectedSources } from '../data/mock';
 import type { DataAssetRow } from '../lib/db';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabase';
 import {
+  classifyAssets,
   connectPostgres,
   discoverPostgres,
   listDataSources,
   listDiscoveredAssets,
+  listOpenFindings,
+  type ClassificationFinding,
+  type ClassifySummary,
   type DiscoverySummary,
 } from '../services/dataSourceService';
 import type { DataSource } from '../types';
@@ -19,6 +23,22 @@ const riskTone: Record<DataSource['risk'], string> = {
   Medium: 'text-amber-400 border-amber-400/30 bg-amber-400/10',
   High: 'text-rose-400 border-rose-400/30 bg-rose-400/10',
 };
+
+const classificationTone: Record<string, string> = {
+  public: 'text-sky-300 border-sky-400/30 bg-sky-400/10',
+  internal: 'text-mist-300 border-line bg-ink-950/70',
+  confidential: 'text-amber-300 border-amber-400/30 bg-amber-400/10',
+  restricted: 'text-rose-300 border-rose-400/30 bg-rose-400/10',
+};
+
+const severityTone: Record<string, string> = {
+  critical: 'text-rose-300 border-rose-400/30 bg-rose-400/10',
+  high: 'text-amber-300 border-amber-400/30 bg-amber-400/10',
+  medium: 'text-mist-300 border-line bg-ink-950/70',
+  low: 'text-sky-300 border-sky-400/30 bg-sky-400/10',
+};
+
+const CLASSIFICATION_OPTIONS = ['public', 'internal', 'confidential', 'restricted'];
 
 const inputClass =
   'mt-2 w-full rounded-xl border border-line bg-ink-950/70 px-3 py-2.5 text-sm text-mist-100 placeholder:text-mist-600 focus:border-accent-400/60 focus:outline-none';
@@ -31,6 +51,12 @@ interface DiscoveredColumn {
   type: string;
   nullable: boolean;
   position: number;
+  classification?: string;
+  sensitivity?: string;
+  confidence?: number | null;
+  rule?: string | null;
+  needs_review?: boolean;
+  classified_by?: string;
 }
 
 function assetColumns(asset: DataAssetRow): DiscoveredColumn[] {
@@ -73,6 +99,33 @@ export function DataSources() {
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
+
+  // Classification + findings state
+  const [classifying, setClassifying] = useState(false);
+  const [classifyError, setClassifyError] = useState<string | null>(null);
+  const [classifyResult, setClassifyResult] = useState<ClassifySummary | null>(null);
+  const [findings, setFindings] = useState<ClassificationFinding[]>([]);
+  const [findingsLoading, setFindingsLoading] = useState(false);
+  const [overridePending, setOverridePending] = useState<string | null>(null);
+
+  const refreshCatalog = useCallback(async (source: DataSource) => {
+    setCatalogLoading(true);
+    setFindingsLoading(true);
+    try {
+      setCatalogAssets(await listDiscoveredAssets(source.id));
+    } catch (err) {
+      setCatalogError(err instanceof Error ? err.message : 'Could not load the catalog.');
+    } finally {
+      setCatalogLoading(false);
+    }
+    try {
+      setFindings(await listOpenFindings(source.id));
+    } catch {
+      /* findings are secondary; the catalog still shows */
+    } finally {
+      setFindingsLoading(false);
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -177,13 +230,41 @@ export function DataSources() {
     setCatalogAssets([]);
     setCatalogError(null);
     setExpandedTable(null);
-    setCatalogLoading(true);
+    setClassifyResult(null);
+    setClassifyError(null);
+    setFindings([]);
+    await refreshCatalog(source);
+  };
+
+  const runClassify = async (assetId?: string) => {
+    if (!catalogSource) return;
+    setClassifying(true);
+    setClassifyError(null);
+    setClassifyResult(null);
     try {
-      setCatalogAssets(await listDiscoveredAssets(source.id));
+      const summary = await classifyAssets(
+        assetId ? { assetId } : { sourceId: catalogSource.id },
+      );
+      setClassifyResult(summary);
+      await refreshCatalog(catalogSource);
     } catch (err) {
-      setCatalogError(err instanceof Error ? err.message : 'Could not load the catalog.');
+      setClassifyError(err instanceof Error ? err.message : 'Classification failed.');
     } finally {
-      setCatalogLoading(false);
+      setClassifying(false);
+    }
+  };
+
+  const overrideColumn = async (asset: DataAssetRow, columnName: string, classification: string) => {
+    const key = `${asset.id}:${columnName}`;
+    setOverridePending(key);
+    setClassifyError(null);
+    try {
+      await classifyAssets({ assetId: asset.id, overrides: [{ column_name: columnName, classification }] });
+      if (catalogSource) await refreshCatalog(catalogSource);
+    } catch (err) {
+      setClassifyError(err instanceof Error ? err.message : 'Could not save the label.');
+    } finally {
+      setOverridePending(null);
     }
   };
 
@@ -377,6 +458,12 @@ export function DataSources() {
             <div className="rounded-xl border border-mint-400/30 bg-mint-400/10 px-4 py-3 text-sm text-mint-300">
               Discovered {discoverResult.tables} tables and {discoverResult.columns} columns —{' '}
               {discoverResult.inserted} new, {discoverResult.updated} updated in your catalog.
+              {discoverResult.findings != null && discoverResult.findings > 0
+                ? ` ${discoverResult.findings} sensitive-data finding${discoverResult.findings === 1 ? '' : 's'} recorded.`
+                : ''}
+              {discoverResult.columns_need_review != null && discoverResult.columns_need_review > 0
+                ? ` ${discoverResult.columns_need_review} column${discoverResult.columns_need_review === 1 ? '' : 's'} need${discoverResult.columns_need_review === 1 ? 's' : ''} your review in the catalog.`
+                : ''}
               {discoverResult.truncated ? ' (Results were capped; narrow the schemas if you need more.)' : ''}
             </div>
           ) : null}
@@ -391,8 +478,55 @@ export function DataSources() {
         open={catalogSource !== null}
         onClose={() => setCatalogSource(null)}
         title={catalogSource ? `${catalogSource.name} — discovered catalog` : 'Discovered catalog'}
-        subtitle="Real table metadata from your database. Classification labels you set are preserved across discoveries."
+        subtitle="Real table metadata from your database. Columns are labeled by deterministic rules — your manual labels always win."
       >
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void runClassify()}
+            disabled={classifying || catalogLoading}
+            className="rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-mist-300 transition hover:border-line-strong hover:text-mist-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {classifying ? 'Classifying…' : 'Re-run classification'}
+          </button>
+          {findingsLoading ? (
+            <span className="text-xs text-mist-500">Loading findings…</span>
+          ) : (
+            <span className="text-xs text-mist-500">
+              {findings.length} open finding{findings.length === 1 ? '' : 's'}
+            </span>
+          )}
+        </div>
+        {classifyError ? <p className="mb-3 text-sm text-rose-400">{classifyError}</p> : null}
+        {classifyResult ? (
+          <div className="mb-3 rounded-xl border border-mint-400/30 bg-mint-400/10 px-4 py-3 text-sm text-mint-300">
+            Classified {classifyResult.columns_classified} columns across {classifyResult.assets_processed}{' '}
+            tables — {classifyResult.findings} findings
+            {classifyResult.columns_need_review > 0
+              ? `, ${classifyResult.columns_need_review} need${classifyResult.columns_need_review === 1 ? 's' : ''} your review.`
+              : '.'}
+          </div>
+        ) : null}
+        {findings.length > 0 ? (
+          <div className="mb-4 space-y-2">
+            {findings.slice(0, 5).map((f) => (
+              <div key={f.id} className="flex items-start justify-between gap-3 rounded-xl border border-line bg-ink-950/60 px-4 py-2.5">
+                <div className="text-xs">
+                  <p className="font-medium text-mist-100">
+                    {f.field_name ? `${f.asset_name}.${f.field_name}` : f.asset_name}
+                  </p>
+                  <p className="mt-0.5 text-mist-500">{f.description}</p>
+                </div>
+                <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] ${severityTone[f.severity] ?? severityTone.medium}`}>
+                  {f.severity}
+                </span>
+              </div>
+            ))}
+            {findings.length > 5 ? (
+              <p className="text-xs text-mist-500">+ {findings.length - 5} more findings</p>
+            ) : null}
+          </div>
+        ) : null}
         {catalogLoading ? (
           <p className="text-sm text-mist-500">Loading catalog…</p>
         ) : catalogError ? (
@@ -405,6 +539,7 @@ export function DataSources() {
               const columns = assetColumns(asset);
               const rowEstimate = assetRowEstimate(asset);
               const expanded = expandedTable === asset.id;
+              const needReview = columns.filter((c) => c.needs_review).length;
               return (
                 <div key={asset.id} className="overflow-hidden rounded-xl border border-line bg-ink-950/60">
                   <button
@@ -412,24 +547,65 @@ export function DataSources() {
                     onClick={() => setExpandedTable(expanded ? null : asset.id)}
                     className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
                   >
-                    <span className="text-sm font-medium text-mist-100">{asset.name}</span>
+                    <span className="flex items-center gap-2 text-sm font-medium text-mist-100">
+                      {asset.name}
+                      <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] ${classificationTone[asset.classification] ?? classificationTone.internal}`}>
+                        {asset.classification}
+                      </span>
+                    </span>
                     <span className="shrink-0 text-xs text-mist-500">
-                      {columns.length} cols{rowEstimate != null ? ` · ~${rowEstimate.toLocaleString()} rows` : ''} ·{' '}
-                      {asset.classification}
+                      {columns.length} cols{rowEstimate != null ? ` · ~${rowEstimate.toLocaleString()} rows` : ''}
+                      {needReview > 0 ? ` · ${needReview} to review` : ''}
                     </span>
                   </button>
                   {expanded ? (
                     <div className="border-t border-line px-4 py-3">
-                      <dl className="space-y-1.5">
-                        {columns.map((col) => (
-                          <div key={col.position} className="flex items-center justify-between gap-3 text-xs">
-                            <dt className="font-mono text-mist-200">{col.name}</dt>
-                            <dd className="text-mist-500">
-                              {col.type}
-                              {col.nullable ? '' : ' · not null'}
-                            </dd>
-                          </div>
-                        ))}
+                      <dl className="space-y-2">
+                        {columns.map((col) => {
+                          const chip = classificationTone[col.classification ?? 'internal'] ?? classificationTone.internal;
+                          const pendingKey = `${asset.id}:${col.name}`;
+                          return (
+                            <div key={col.position} className="flex items-center justify-between gap-3 text-xs">
+                              <div className="min-w-0">
+                                <dt className="truncate font-mono text-mist-200">{col.name}</dt>
+                                <dd className="mt-0.5 text-mist-500">
+                                  {col.type}
+                                  {col.nullable ? '' : ' · not null'}
+                                  {col.rule ? ` · ${col.rule}` : ''}
+                                  {typeof col.confidence === 'number' ? ` · ${Math.round(col.confidence * 100)}%` : ''}
+                                  {col.classified_by === 'manual' ? ' · yours' : ''}
+                                </dd>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-2">
+                                {col.needs_review ? (
+                                  <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] text-amber-300">
+                                    Review
+                                  </span>
+                                ) : null}
+                                <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.12em] ${chip}`}>
+                                  {col.classification ?? 'internal'}
+                                </span>
+                                <select
+                                  aria-label={`Set classification for ${col.name}`}
+                                  value=""
+                                  disabled={overridePending === pendingKey}
+                                  onChange={(e) => {
+                                    if (e.target.value) void overrideColumn(asset, col.name, e.target.value);
+                                    e.target.value = '';
+                                  }}
+                                  className="rounded-lg border border-line bg-ink-900 px-2 py-1 text-[11px] text-mist-400 focus:border-accent-400/60 focus:outline-none disabled:opacity-60"
+                                >
+                                  <option value="">Label…</option>
+                                  {CLASSIFICATION_OPTIONS.map((opt) => (
+                                    <option key={opt} value={opt}>
+                                      {opt}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </dl>
                     </div>
                   ) : null}
