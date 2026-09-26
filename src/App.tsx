@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Navbar } from './components/Navbar';
+import { ProfileModal } from './components/ProfileModal';
 import { RequestSimulator } from './components/RequestSimulator';
 import { SignInModal } from './components/SignInModal';
 import { Agents } from './sections/Agents';
@@ -17,12 +18,25 @@ import { Pricing } from './sections/Pricing';
 import { Problem } from './sections/Problem';
 import { Security } from './sections/Security';
 import { UseCases } from './sections/UseCases';
+import { getActiveOrganization } from './services/organizationService';
 
 function App() {
   const [simulatorOpen, setSimulatorOpen] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   const openSimulator = () => setSimulatorOpen(true);
+
+  /** After sign-in/sign-up: if the user has no organization yet, open the profile so they can create one. */
+  const handleAuthSuccess = async () => {
+    setSignInOpen(false);
+    try {
+      const org = await getActiveOrganization();
+      if (!org) setProfileOpen(true);
+    } catch {
+      setProfileOpen(true);
+    }
+  };
 
   return (
     <div className="min-h-screen">
@@ -32,7 +46,7 @@ function App() {
       >
         Skip to content
       </a>
-      <Navbar onSignIn={() => setSignInOpen(true)} />
+      <Navbar onSignIn={() => setSignInOpen(true)} onProfile={() => setProfileOpen(true)} />
       <main>
         <Hero />
         <Problem />
@@ -51,7 +65,8 @@ function App() {
       </main>
       <Footer />
       <RequestSimulator open={simulatorOpen} onClose={() => setSimulatorOpen(false)} />
-      <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} />
+      <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} onAuthSuccess={() => void handleAuthSuccess()} />
+      <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} />
     </div>
   );
 }
