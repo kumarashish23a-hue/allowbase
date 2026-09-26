@@ -6,3 +6,10 @@ name = "dataplane"
 [functions.evaluate-ai-request]
 enabled = true
 verify_jwt = true
+
+# Public API front door: authenticates via x-api-key (org-bound, hash-only),
+# not via Supabase JWT. Gateway JWT check must stay off or it rejects every
+# API call before our own auth runs.
+[functions.ingest-event]
+enabled = true
+verify_jwt = false
