@@ -1,9 +1,5 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { Navbar } from './components/Navbar';
-import { ProfileModal } from './components/ProfileModal';
-import { RequestSimulator } from './components/RequestSimulator';
-import { SetupModal } from './components/SetupModal';
-import { SignInModal } from './components/SignInModal';
 import { Agents } from './sections/Agents';
 import { AIRequest } from './sections/AIRequest';
 import { DataSources } from './sections/DataSources';
@@ -21,6 +17,14 @@ import { Security } from './sections/Security';
 import { UseCases } from './sections/UseCases';
 import { getActiveOrganization } from './services/organizationService';
 import { getSetupStatus } from './services/setupService';
+
+// Modals are code-split: they load on demand instead of bloating the first paint.
+const ProfileModal = lazy(() => import('./components/ProfileModal').then((m) => ({ default: m.ProfileModal })));
+const RequestSimulator = lazy(() =>
+  import('./components/RequestSimulator').then((m) => ({ default: m.RequestSimulator })),
+);
+const SetupModal = lazy(() => import('./components/SetupModal').then((m) => ({ default: m.SetupModal })));
+const SignInModal = lazy(() => import('./components/SignInModal').then((m) => ({ default: m.SignInModal })));
 
 function App() {
   const [simulatorOpen, setSimulatorOpen] = useState(false);
@@ -79,15 +83,17 @@ function App() {
         <FinalCta onDemo={openSimulator} />
       </main>
       <Footer />
-      <RequestSimulator open={simulatorOpen} onClose={() => setSimulatorOpen(false)} />
-      <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} onAuthSuccess={() => void handleAuthSuccess()} />
-      <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} onOpenSetup={() => setSetupOpen(true)} />
-      <SetupModal
-        open={setupOpen}
-        onClose={() => setSetupOpen(false)}
-        onSignIn={() => setSignInOpen(true)}
-        onTrySimulator={openSimulator}
-      />
+      <Suspense fallback={null}>
+        <RequestSimulator open={simulatorOpen} onClose={() => setSimulatorOpen(false)} />
+        <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} onAuthSuccess={() => void handleAuthSuccess()} />
+        <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} onOpenSetup={() => setSetupOpen(true)} />
+        <SetupModal
+          open={setupOpen}
+          onClose={() => setSetupOpen(false)}
+          onSignIn={() => setSignInOpen(true)}
+          onTrySimulator={openSimulator}
+        />
+      </Suspense>
     </div>
   );
 }
