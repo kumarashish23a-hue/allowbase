@@ -1,32 +1,32 @@
 @import "tailwindcss";
 
 @theme {
-  --color-ink-950: #020409;
-  --color-ink-900: #05080f;
-  --color-ink-850: #080d17;
-  --color-ink-800: #0b1120;
-  --color-ink-700: #0f1830;
-  --color-ink-600: #16233f;
+  --color-ink-950: #080b10;
+  --color-ink-900: #10151d;
+  --color-ink-850: #121a24;
+  --color-ink-800: #151c26;
+  --color-ink-700: #1a2330;
+  --color-ink-600: #212c3e;
 
-  --color-line: rgba(125, 180, 255, 0.16);
-  --color-line-strong: rgba(125, 180, 255, 0.28);
+  --color-line: #263241;
+  --color-line-strong: #3a4c64;
 
-  --color-mist-100: #f4f8ff;
-  --color-mist-200: #e3ecfc;
-  --color-mist-300: #c9d8f4;
-  --color-mist-400: #a3b9dd;
-  --color-mist-500: #7288ad;
-  --color-mist-600: #525f7e;
+  --color-mist-100: #f1f5f9;
+  --color-mist-200: #e2e8f0;
+  --color-mist-300: #cbd5e1;
+  --color-mist-400: #94a3b8;
+  --color-mist-500: #64748b;
+  --color-mist-600: #475569;
 
-  --color-accent-200: #c2e7ff;
-  --color-accent-300: #8fd4ff;
-  --color-accent-400: #4fbdfc;
-  --color-accent-500: #1899f2;
-  --color-accent-600: #0b78cf;
+  --color-accent-200: #a5f3fc;
+  --color-accent-300: #67e8f9;
+  --color-accent-400: #22d3ee;
+  --color-accent-500: #06b6d4;
+  --color-accent-600: #0e7490;
 
-  --color-mint-400: #5fd0a5;
+  --color-mint-400: #34d399;
   --color-amber-400: #e8b45a;
-  --color-rose-400: #ef7d8f;
+  --color-rose-400: #f87171;
 
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
@@ -71,9 +71,9 @@ html {
 
 body {
   background:
-    radial-gradient(1200px 620px at 50% -8%, rgba(24, 153, 242, 0.2), transparent 62%),
-    radial-gradient(900px 520px at 88% 18%, rgba(95, 208, 165, 0.07), transparent 60%),
-    radial-gradient(760px 620px at 8% 32%, rgba(11, 120, 207, 0.14), transparent 62%),
+    radial-gradient(1200px 620px at 50% -8%, rgba(34, 211, 238, 0.13), transparent 62%),
+    radial-gradient(900px 520px at 88% 18%, rgba(52, 211, 153, 0.06), transparent 60%),
+    radial-gradient(760px 620px at 8% 32%, rgba(56, 189, 248, 0.1), transparent 62%),
     var(--color-ink-950);
   color: var(--color-mist-100);
   font-family: var(--font-sans);
@@ -82,12 +82,12 @@ body {
 }
 
 ::selection {
-  background: rgba(24, 153, 242, 0.38);
-  color: #fff;
+  background: rgba(34, 211, 238, 0.32);
+  color: #06202a;
 }
 
 :focus-visible {
-  outline: 2px solid rgba(79, 189, 252, 0.9);
+  outline: 2px solid rgba(34, 211, 238, 0.9);
   outline-offset: 3px;
   border-radius: 6px;
 }

@@ -11,7 +11,7 @@ export function FinalCta({ onDemo }: FinalCtaProps) {
       <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
         <Reveal>
           <div className="relative overflow-hidden rounded-3xl border border-line bg-ink-900/70 px-6 py-14 text-center shadow-panel sm:px-12 lg:py-20">
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(640px_320px_at_50%_0%,rgba(24,153,242,0.25),transparent_70%)]" />
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(640px_320px_at_50%_0%,rgba(34,211,238,0.22),transparent_70%)]" />
             <div className="relative mx-auto max-w-3xl">
               <h2 className="text-3xl font-semibold tracking-tight text-mist-100 sm:text-4xl lg:text-5xl">
                 AI shouldn't mean giving up control of your data.
