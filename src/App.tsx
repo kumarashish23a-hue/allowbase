@@ -54,7 +54,15 @@ function App() {
         return;
       }
       const status = await getSetupStatus().catch(() => null);
-      if (status && (!status.hasData || status.edgeFunction !== 'deployed')) {
+      if (
+        status &&
+        (!status.hasData ||
+          status.migrations.state !== 'ok' ||
+          status.functions['evaluate-ai-request'] !== 'deployed' ||
+          status.functions['ingest-event'] !== 'deployed' ||
+          !status.hasApiKey ||
+          !status.hasRequests)
+      ) {
         setSetupOpen(true);
       }
     } catch {

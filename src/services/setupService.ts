@@ -2,19 +2,59 @@ import { getActiveOrganizationId, getSupabase, isSupabaseConfigured } from '../l
 
 export type EdgeFunctionStatus = 'deployed' | 'missing' | 'unknown';
 
+export interface MigrationStatus {
+  state: 'ok' | 'missing' | 'unknown';
+  /** Migration files (under supabase/migrations/) that still need to be run, in order. */
+  missingFiles: string[];
+}
+
 export interface SetupStatus {
   configured: boolean;
   signedIn: boolean;
   hasOrg: boolean;
   orgName: string | null;
+  migrations: MigrationStatus;
   /** True when the org already has models, assets, or policies. */
   hasData: boolean;
-  edgeFunction: EdgeFunctionStatus;
+  functions: Record<'evaluate-ai-request' | 'ingest-event', EdgeFunctionStatus>;
+  /** True when at least one non-revoked API key exists. */
+  hasApiKey: boolean;
+  /** True when at least one AI request has been recorded. */
+  hasRequests: boolean;
 }
 
 export const EDGE_FUNCTION_NAME = 'evaluate-ai-request';
+export const INGEST_FUNCTION_NAME = 'ingest-event';
 const EDGE_FUNCTION_CODE_URL =
   'https://raw.githubusercontent.com/kumarashish23a-hue/dataplane/main/supabase/functions/evaluate-ai-request/index.ts';
+
+/** Tables that prove their migration has been applied, and the file to run if not. */
+const MIGRATION_TABLES: { table: string; file: string }[] = [
+  { table: 'organizations', file: '001_core.sql → 009_seed.sql' },
+  { table: 'ai_requests', file: '005_requests.sql' },
+  { table: 'approval_requests', file: '010_hardening.sql' },
+  { table: 'api_keys', file: '011_api_keys.sql' },
+];
+
+/** Check which migrations are missing by probing for their tables. Never throws. */
+async function checkMigrations(
+  supabase: NonNullable<ReturnType<typeof getSupabase>>,
+): Promise<MigrationStatus> {
+  const missingFiles: string[] = [];
+  for (const { table, file } of MIGRATION_TABLES) {
+    const { error } = await supabase.from(table).select('id', { head: true }).limit(1);
+    if (!error) continue;
+    if ((error as { code?: string }).code === '42P01') {
+      if (!missingFiles.includes(file)) missingFiles.push(file);
+      continue;
+    }
+    // A real error (RLS, network…) — don't claim anything is missing.
+    return { state: 'unknown', missingFiles: [] };
+  }
+  return missingFiles.length > 0
+    ? { state: 'missing', missingFiles }
+    : { state: 'ok', missingFiles: [] };
+}
 
 /** Full setup checklist state for the current user. */
 export async function getSetupStatus(): Promise<SetupStatus> {
@@ -23,8 +63,11 @@ export async function getSetupStatus(): Promise<SetupStatus> {
     signedIn: false,
     hasOrg: false,
     orgName: null,
+    migrations: { state: 'unknown', missingFiles: [] },
     hasData: false,
-    edgeFunction: 'unknown',
+    functions: { 'evaluate-ai-request': 'unknown', 'ingest-event': 'unknown' },
+    hasApiKey: false,
+    hasRequests: false,
   };
   const supabase = getSupabase();
   if (!supabase) return fallback;
@@ -43,33 +86,44 @@ export async function getSetupStatus(): Promise<SetupStatus> {
   if (!first) return { ...fallback, signedIn: true };
 
   const orgId = first.organization_id;
-  const [models, assets, policies] = await Promise.all([
+  const [models, assets, policies, keys, requests, migrations, evaluateFn, ingestFn] = await Promise.all([
     supabase.from('ai_models').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
     supabase.from('data_assets').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
     supabase.from('policies').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
+    supabase
+      .from('api_keys')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', orgId)
+      .is('revoked_at', null),
+    supabase.from('ai_requests').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
+    checkMigrations(supabase),
+    probeEdgeFunction(EDGE_FUNCTION_NAME),
+    probeEdgeFunction(INGEST_FUNCTION_NAME),
   ]);
   const hasData = (models.count ?? 0) + (assets.count ?? 0) + (policies.count ?? 0) > 0;
-  const edgeFunction = await probeEdgeFunction();
   return {
     configured: true,
     signedIn: true,
     hasOrg: true,
     orgName: first.organizations?.name ?? null,
+    migrations,
     hasData,
-    edgeFunction,
+    functions: { 'evaluate-ai-request': evaluateFn, 'ingest-event': ingestFn },
+    hasApiKey: (keys.count ?? 0) > 0,
+    hasRequests: (requests.count ?? 0) > 0,
   };
 }
 
 /**
- * Probe whether the evaluate-ai-request Edge Function is deployed.
+ * Probe whether an Edge Function is deployed.
  * Sends an empty body: a deployed function answers 400/401 (validation),
  * a missing one answers 404. No database side effects either way.
  */
-export async function probeEdgeFunction(): Promise<EdgeFunctionStatus> {
+export async function probeEdgeFunction(functionName: string): Promise<EdgeFunctionStatus> {
   const supabase = getSupabase();
   if (!supabase) return 'unknown';
   try {
-    const { error } = await supabase.functions.invoke(EDGE_FUNCTION_NAME, { body: {} });
+    const { error } = await supabase.functions.invoke(functionName, { body: {} });
     if (!error) return 'deployed';
     const status = (error as { context?: { status?: number } }).context?.status;
     const message = String((error as Error).message ?? '').toLowerCase();
@@ -291,6 +345,18 @@ export function getFunctionsDashboardUrl(): string | null {
   }
 }
 
+/** Deep link to the Supabase dashboard's SQL editor for this project. */
+export function getSqlEditorUrl(): string | null {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    const url = import.meta.env.VITE_SUPABASE_URL as string;
+    const ref = new URL(url).hostname.split('.')[0];
+    if (!ref) return null;
+    return `https://supabase.com/dashboard/project/${ref}/sql/new`;
+  } catch {
+    return null;
+  }
+}
 /** Fetch the Edge Function source so the user can copy-paste it into the dashboard. */
 export async function fetchEdgeFunctionCode(): Promise<string> {
   const res = await fetch(EDGE_FUNCTION_CODE_URL);
