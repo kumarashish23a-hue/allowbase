@@ -15,7 +15,7 @@
 --  - event_id gives callers idempotency: retries return the original verdict.
 
 -- API keys --------------------------------------------------------------------
-create table public.api_keys (
+create table if not exists public.api_keys (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references public.organizations(id) on delete cascade,
   name text not null check (char_length(name) between 1 and 100),
@@ -29,30 +29,34 @@ create table public.api_keys (
   created_at timestamptz not null default now()
 );
 
-create index idx_api_keys_org on public.api_keys (organization_id);
-create index idx_api_keys_hash on public.api_keys (key_hash);
+create index if not exists idx_api_keys_org on public.api_keys (organization_id);
+create index if not exists idx_api_keys_hash on public.api_keys (key_hash);
 
 alter table public.api_keys enable row level security;
 
 -- Members can read key metadata (prefix, scopes, usage). The plaintext is
 -- never stored, so there is nothing secret in these rows.
+drop policy if exists "api_keys_select_member" on public.api_keys;
 create policy "api_keys_select_member"
   on public.api_keys for select
   using (public.is_org_member(organization_id));
 
 -- Keys are minted only through create_api_key (which generates the secret
 -- server-side). Direct inserts are blocked.
+drop policy if exists "api_keys_no_direct_insert" on public.api_keys;
 create policy "api_keys_no_direct_insert"
   on public.api_keys for insert
   with check (false);
 
 -- Revocation is an update; privileged roles only (checked again in the RPC).
+drop policy if exists "api_keys_update_privileged" on public.api_keys;
 create policy "api_keys_update_privileged"
   on public.api_keys for update
   using (public.has_org_role(organization_id, array['owner', 'admin']))
   with check (public.has_org_role(organization_id, array['owner', 'admin']));
 
 -- Keys are revoked, never deleted: the audit trail must keep working.
+drop policy if exists "api_keys_no_delete" on public.api_keys;
 create policy "api_keys_no_delete"
   on public.api_keys for delete
   using (false);
