@@ -111,24 +111,44 @@ export async function evaluateRequest(input: EvaluateInput): Promise<MockEvaluat
 }
 
 /** Recent AI requests for the active organization. Empty when offline. */
-export async function getAIRequests(limit = 20): Promise<
-  { id: string; purpose: string; status: string; risk: string; created_at: string }[]
-> {
+export interface AIRequestRow {
+  id: string;
+  event_id: string | null;
+  purpose: string;
+  status: string;
+  risk: string;
+  model: string | null;
+  policies: string[];
+  via_api: boolean;
+  created_at: string;
+}
+
+export async function getAIRequests(limit = 25): Promise<AIRequestRow[]> {
   const supabase = getSupabase();
   const orgId = await getActiveOrganizationId();
   if (!supabase || !orgId) return [];
   const { data, error } = await supabase
     .from('ai_requests')
-    .select('id,purpose,status,risk_level,created_at')
+    .select('id,event_id,purpose,status,risk_level,created_at,metadata,ai_models(name)')
     .eq('organization_id', orgId)
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error) throw new Error('Could not load AI requests.');
-  return (data ?? []).map((row) => ({
-    id: row.id,
-    purpose: row.purpose,
-    status: row.status,
-    risk: row.risk_level,
-    created_at: row.created_at,
-  }));
+  return (data ?? []).map((row) => {
+    const metadata = (row.metadata ?? {}) as Record<string, unknown>;
+    const policies = Array.isArray(metadata.policies_triggered)
+      ? (metadata.policies_triggered as string[])
+      : [];
+    return {
+      id: row.id,
+      event_id: row.event_id ?? null,
+      purpose: row.purpose,
+      status: row.status,
+      risk: row.risk_level,
+      model: (row.ai_models as { name?: string } | null)?.name ?? null,
+      policies,
+      via_api: typeof metadata.api_key_id === 'string',
+      created_at: row.created_at,
+    };
+  });
 }

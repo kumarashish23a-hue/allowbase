@@ -13,6 +13,7 @@ import { Hero } from './sections/Hero';
 import { HowItWorks } from './sections/HowItWorks';
 import { TrustPrinciples } from './sections/TrustPrinciples';
 import { Platform } from './sections/Platform';
+import { Requests } from './sections/Requests';
 import { PolicyEngine } from './sections/PolicyEngine';
 import { Pricing } from './sections/Pricing';
 import { Problem } from './sections/Problem';
@@ -85,6 +86,7 @@ function App() {
         <Security />
         <Developers />
         <ApiKeys />
+        <Requests />
         <UseCases />
         <Pricing onDemo={openSimulator} />
         <Faq />
