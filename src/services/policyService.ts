@@ -1,4 +1,3 @@
-import { policies as seedPolicies } from '../data/mock';
 import type { PolicyRow } from '../lib/db';
 import { getActiveOrganizationId, getSupabase } from '../lib/supabase';
 import type { Decision, Policy } from '../types';
@@ -44,7 +43,7 @@ export interface PolicyDraft {
 export async function listPolicies(): Promise<Policy[]> {
   const supabase = getSupabase();
   const orgId = await getActiveOrganizationId();
-  if (!supabase || !orgId) return seedPolicies;
+  if (!supabase || !orgId) return [];
   const { data, error } = await supabase
     .from('policies')
     .select('*')

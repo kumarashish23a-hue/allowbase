@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { Modal } from '../components/Modal';
 import { Reveal } from '../components/Reveal';
 import { SectionHeading } from '../components/SectionHeading';
-import { connectedSources } from '../data/mock';
 import type { DataAssetRow } from '../lib/db';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabase';
 import {
@@ -70,7 +69,7 @@ function assetRowEstimate(asset: DataAssetRow): number | null {
 }
 
 export function DataSources() {
-  const [sources, setSources] = useState<DataSource[]>(connectedSources);
+  const [sources, setSources] = useState<DataSource[]>([]);
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const [selected, setSelected] = useState<DataSource | null>(null);
 
@@ -129,8 +128,7 @@ export function DataSources() {
 
   const refresh = useCallback(async () => {
     try {
-      const loaded = await listDataSources();
-      if (loaded.length > 0) setSources(loaded);
+      setSources(await listDataSources());
     } catch {
       /* keep current sources when offline */
     }
@@ -273,7 +271,7 @@ export function DataSources() {
       <SectionHeading
         eyebrow="Data sources"
         title="Know where your data lives."
-        description="Connect a real PostgreSQL database to discover its tables into your catalog. Everything else below is a mock integration for the landing-page tour."
+        description="Connect a real PostgreSQL database to discover its tables into your catalog. Passwords are never stored."
       />
 
       <div className="mt-12 flex flex-wrap items-center justify-between gap-3">
@@ -291,6 +289,14 @@ export function DataSources() {
         </button>
       </div>
 
+      {sources.length === 0 ? (
+        <div className="mt-6 rounded-xl border border-dashed border-line bg-ink-950/40 p-8 text-center">
+          <p className="text-sm font-semibold text-mist-200">No data sources connected yet.</p>
+          <p className="mt-1 text-sm text-mist-500">
+            Connect your PostgreSQL database above to discover its tables.
+          </p>
+        </div>
+      ) : (
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {sources.map((source, index) => (
           <Reveal key={source.id} delay={index * 0.05}>
@@ -360,6 +366,7 @@ export function DataSources() {
           </Reveal>
         ))}
       </div>
+      )}
 
       {/* Mock scan modal (unchanged landing-page behavior) */}
       <Modal

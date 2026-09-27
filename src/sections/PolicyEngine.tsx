@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import { CreatePolicyModal } from '../components/PolicyModals';
 import { Reveal } from '../components/Reveal';
 import { SectionHeading } from '../components/SectionHeading';
-import { policies as seedPolicies } from '../data/mock';
 import { isSupabaseConfigured } from '../lib/supabase';
 import { createPolicy, listPolicies } from '../services/policyService';
 import type { Policy } from '../types';
@@ -16,7 +15,7 @@ const effectTone: Record<Policy['effect'], string> = {
 };
 
 export function PolicyEngine() {
-  const [policies, setPolicies] = useState<Policy[]>(seedPolicies);
+  const [policies, setPolicies] = useState<Policy[]>([]);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -26,7 +25,7 @@ export function PolicyEngine() {
         if (!cancelled) setPolicies(loaded);
       })
       .catch(() => {
-        /* keep seed policies when offline */
+        /* keep current policies when offline */
       });
     return () => {
       cancelled = true;
@@ -60,6 +59,14 @@ export function PolicyEngine() {
       />
 
       <div className="mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {policies.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-line bg-ink-900/40 p-8 text-center md:col-span-2 lg:col-span-3">
+            <p className="text-sm font-semibold text-mist-200">No policies yet.</p>
+            <p className="mt-1 text-sm text-mist-500">
+              Create your first policy below to start protecting AI requests.
+            </p>
+          </div>
+        ) : null}
         {policies.map((policy, index) => (
           <Reveal key={policy.id} delay={index * 0.06}>
             <div className="flex h-full flex-col rounded-xl border border-line bg-ink-900/60 p-6 shadow-card transition hover:border-line-strong">

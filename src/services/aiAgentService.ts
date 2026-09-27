@@ -1,4 +1,3 @@
-import { agents as seedAgents } from '../data/mock';
 import type { AgentPermissionRow, AiAgentRow } from '../lib/db';
 import { getActiveOrganizationId, getSupabase } from '../lib/supabase';
 import type { Agent, RiskLevel } from '../types';
@@ -63,7 +62,7 @@ function toAgent(lookup: AgentLookup, row: AiAgentRow): Agent {
 export async function listAgents(): Promise<Agent[]> {
   const supabase = getSupabase();
   const orgId = await getActiveOrganizationId();
-  if (!supabase || !orgId) return seedAgents;
+  if (!supabase || !orgId) return [];
   const lookup = await loadLookup(supabase, orgId);
   return lookup.agents.map((row) => toAgent(lookup, row));
 }

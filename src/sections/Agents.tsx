@@ -2,7 +2,6 @@ import { Bot, Check, ChevronDown, Pause, Play, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Reveal } from '../components/Reveal';
 import { SectionHeading } from '../components/SectionHeading';
-import { agents as seedAgents } from '../data/mock';
 import { getActiveOrganizationId, getSupabase, isSupabaseConfigured } from '../lib/supabase';
 import {
   getAgentAssetGrants,
@@ -21,7 +20,7 @@ const riskTone: Record<Agent['risk'], string> = {
 };
 
 export function Agents() {
-  const [agents, setAgents] = useState<Agent[]>(seedAgents);
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [live, setLive] = useState(false);
   const [assets, setAssets] = useState<DataAsset[]>([]);
   const [grantMap, setGrantMap] = useState<Record<string, Set<string>>>({});
@@ -52,7 +51,7 @@ export function Agents() {
           }
         }
       } catch {
-        /* keep seed agents when offline */
+        /* keep current agents when offline */
       }
     })();
     return () => {
@@ -121,6 +120,14 @@ export function Agents() {
           description="AI is moving from answering questions to taking actions. Give every agent explicit data and action permissions."
         />
 
+        {agents.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-line bg-ink-950/40 p-8 text-center sm:col-span-2 xl:col-span-4">
+            <p className="text-sm font-semibold text-mist-200">No AI agents registered yet.</p>
+            <p className="mt-1 text-sm text-mist-500">
+              Register your first agent from the setup wizard or the admin panel.
+            </p>
+          </div>
+        ) : null}
         <div className="mt-12 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {agents.map((agent, index) => (
             <Reveal key={agent.id} delay={index * 0.06}>

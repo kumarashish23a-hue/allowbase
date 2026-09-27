@@ -1,4 +1,3 @@
-import { connectedSources } from '../data/mock';
 import type { DataAssetRow, DataSourceRow } from '../lib/db';
 import { getActiveOrganizationId, getSupabase } from '../lib/supabase';
 import type { DataSource, RiskLevel } from '../types';
@@ -250,7 +249,7 @@ function toDataSource(row: DataSourceRow): DataSource {
 export async function listDataSources(): Promise<DataSource[]> {
   const supabase = getSupabase();
   const orgId = await getActiveOrganizationId();
-  if (!supabase || !orgId) return connectedSources;
+  if (!supabase || !orgId) return [];
   const { data, error } = await supabase
     .from('data_sources')
     .select('*')
