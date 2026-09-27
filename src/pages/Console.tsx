@@ -10,7 +10,7 @@ import {
   Users,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { Agents } from '../sections/Agents';
 import { AIRequest } from '../sections/AIRequest';
 import { Approvals } from '../sections/Approvals';
@@ -348,14 +348,6 @@ export function Console({ onSimulate }: ConsoleProps) {
             Supabase project in real time.
           </p>
         </div>
-        {isAdmin ? (
-          <Link
-            to="/admin"
-            className="mt-1 inline-flex items-center gap-2 rounded-xl border border-line px-4 py-2.5 text-sm font-medium text-mist-200 transition hover:border-line-strong hover:text-mist-100"
-          >
-            <ShieldCheck size={15} /> Admin panel
-          </Link>
-        ) : null}
       </div>
 
       {/* Tab bar: horizontal scroll on mobile, sidebar on desktop */}
