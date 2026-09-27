@@ -66,6 +66,7 @@ export function Admin() {
   const [loginPass, setLoginPass] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
   const [gate, setGate] = useState<'loading' | 'denied' | 'allowed'>('loading');
+  const [gateError, setGateError] = useState<string | null>(null);
   const [tab, setTab] = useState<TabId>('clients');
   const [orgs, setOrgs] = useState<OrganizationRow[]>([]);
   const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
@@ -103,34 +104,63 @@ export function Admin() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    let finished = false;
+    const finish = (state: 'denied' | 'allowed', errMsg: string | null) => {
+      if (cancelled || finished) return;
+      finished = true;
+      window.clearTimeout(timer);
+      setGateError(errMsg);
+      setGate(state);
+    };
+    // Never leave the user staring at "Checking access..." — bail out with a retry.
+    const timer = window.setTimeout(() => {
+      finish(
+        'denied',
+        'The access check timed out. Try again — if it keeps happening, sign out and back in.',
+      );
+    }, 15000);
     (async () => {
-      if (!isSupabaseConfigured()) {
-        setGate('denied');
-        return;
+      try {
+        if (!isSupabaseConfigured()) {
+          finish('denied', 'Supabase is not configured.');
+          return;
+        }
+        const supabase = getSupabase();
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase!.auth.getUser();
+        if (userError) throw userError;
+        if (!user) {
+          finish('denied', null);
+          return;
+        }
+        const org = await getActiveOrganization().catch(() => null);
+        if (!org) {
+          finish('denied', 'No workspace found for your account.');
+          return;
+        }
+        const role = await getMyOrganizationRole(org.id).catch(() => null);
+        if (role !== 'owner' && role !== 'admin') {
+          finish('denied', null);
+          return;
+        }
+        finish('allowed', null);
+        await refresh().catch((err: unknown) => {
+          if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load admin data.');
+        });
+      } catch (err: unknown) {
+        finish(
+          'denied',
+          err instanceof Error ? err.message : 'The access check failed. Please try again.',
+        );
       }
-      const supabase = getSupabase();
-      const {
-        data: { user },
-      } = await supabase!.auth.getUser();
-      if (!user) {
-        setGate('denied');
-        return;
-      }
-      const org = await getActiveOrganization().catch(() => null);
-      if (!org) {
-        setGate('denied');
-        return;
-      }
-      const role = await getMyOrganizationRole(org.id).catch(() => null);
-      if (role !== 'owner' && role !== 'admin') {
-        setGate('denied');
-        return;
-      }
-      setGate('allowed');
-      await refresh().catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : 'Could not load admin data.');
-      });
     })();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, [refresh]);
 
   const run = async (fn: () => Promise<void>, ok: string) => {
@@ -213,9 +243,15 @@ export function Admin() {
           This area is for workspace owners and admins. Sign in with an owner or admin account to
           manage clients, members, policies, agents, and API keys.
         </p>
-        <Link to="/app" className={`${btnGhost} mt-6 inline-block`}>
-          Back to console
-        </Link>
+        {gateError ? <p className="mt-3 max-w-xl text-sm text-rose-400">{gateError}</p> : null}
+        <div className="mt-6 flex gap-3">
+          <button type="button" onClick={() => window.location.reload()} className={btnGhost}>
+            Try again
+          </button>
+          <Link to="/app" className={btnGhost}>
+            Back to console
+          </Link>
+        </div>
       </div>
     );
   }
