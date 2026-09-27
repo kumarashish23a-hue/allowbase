@@ -17,7 +17,7 @@ function getInitialTheme(): Theme {
 
 /** Browser chrome (mobile address bar etc.) color per theme. */
 const metaThemeColors: Record<Theme, string> = {
-  light: '#edf1f7',
+  light: '#f6f2e9',
   dark: '#080b10',
   negative: '#120e08',
 };
@@ -50,7 +50,7 @@ export function useTheme() {
 
 /** Vanta NET colors per theme (hex numbers for three.js). */
 export const vantaThemeColors: Record<Theme, { background: number; color: number }> = {
-  light: { background: 0xedf1f7, color: 0x06b6d4 },
+  light: { background: 0xf6f2e9, color: 0x0d9488 },
   dark: { background: 0x080b10, color: 0x22d3ee },
   negative: { background: 0x120e08, color: 0xf9492b },
 };
@@ -70,14 +70,14 @@ export const chartPalette: Record<
   }
 > = {
   light: {
-    tick: '#475569',
-    tickSoft: '#94a3b8',
-    area: '#22d3ee',
-    bar: '#06b6d4',
-    barGreen: '#34d399',
-    blocked: '#f87171',
-    risk: ['#059669', '#d97706', '#dc2626'],
-    legend: '#67e8f9',
+    tick: '#57534e',
+    tickSoft: '#a8a29e',
+    area: '#2dd4bf',
+    bar: '#0d9488',
+    barGreen: '#10b981',
+    blocked: '#dc2626',
+    risk: ['#047857', '#b45309', '#b91c1c'],
+    legend: '#5eead4',
   },
   dark: {
     tick: '#94a3b8',

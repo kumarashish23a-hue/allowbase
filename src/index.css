@@ -1,39 +1,39 @@
 @import "tailwindcss";
 
 @theme {
-  --color-ink-950: #edf1f7;
-  --color-ink-900: #ffffff;
-  --color-ink-850: #f7f9fc;
-  --color-ink-800: #ffffff;
-  --color-ink-700: #eef2f8;
-  --color-ink-600: #e2e9f2;
+  --color-ink-950: #f6f2e9;
+  --color-ink-900: #fffdf7;
+  --color-ink-850: #faf6ec;
+  --color-ink-800: #fffdf7;
+  --color-ink-700: #efe9da;
+  --color-ink-600: #e5dcc8;
 
-  --color-line: #d9e1ec;
-  --color-line-strong: #b6c3d6;
+  --color-line: #e2d9c3;
+  --color-line-strong: #c9bb9f;
 
-  --color-mist-100: #0b1526;
-  --color-mist-200: #1c2a42;
-  --color-mist-300: #33415c;
-  --color-mist-400: #4b5b76;
-  --color-mist-500: #687d99;
-  --color-mist-600: #93a3b8;
+  --color-mist-100: #1c1917;
+  --color-mist-200: #292524;
+  --color-mist-300: #44403c;
+  --color-mist-400: #57534e;
+  --color-mist-500: #78716c;
+  --color-mist-600: #a8a29e;
 
-  --color-accent-200: #cffafe;
-  --color-accent-300: #67e8f9;
-  --color-accent-400: #22d3ee;
-  --color-accent-500: #06b6d4;
-  --color-accent-600: #0e7490;
-  --color-accent-ink: #06202a;
+  --color-accent-200: #ccfbf1;
+  --color-accent-300: #5eead4;
+  --color-accent-400: #2dd4bf;
+  --color-accent-500: #0d9488;
+  --color-accent-600: #0f766e;
+  --color-accent-ink: #042f2b;
 
-  --color-mint-400: #059669;
-  --color-amber-400: #d97706;
-  --color-rose-400: #dc2626;
+  --color-mint-400: #047857;
+  --color-amber-400: #b45309;
+  --color-rose-400: #b91c1c;
 
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
 
-  --shadow-panel: 0 24px 70px -28px rgba(15, 35, 60, 0.22);
-  --shadow-card: 0 16px 44px -24px rgba(15, 35, 60, 0.18);
+  --shadow-panel: 0 24px 70px -28px rgba(120, 96, 50, 0.25);
+  --shadow-card: 0 16px 44px -24px rgba(120, 96, 50, 0.2);
 
   --animate-dash: dash 2.6s linear infinite;
   --animate-float: float 7s ease-in-out infinite;
@@ -149,9 +149,9 @@ html {
 
 body {
   background:
-    radial-gradient(1200px 620px at 50% -8%, rgba(34, 211, 238, 0.14), transparent 62%),
-    radial-gradient(900px 520px at 88% 18%, rgba(5, 150, 105, 0.06), transparent 60%),
-    radial-gradient(760px 620px at 8% 32%, rgba(56, 189, 248, 0.1), transparent 62%),
+    radial-gradient(1200px 620px at 50% -8%, rgba(13, 148, 136, 0.1), transparent 62%),
+    radial-gradient(900px 520px at 88% 18%, rgba(217, 119, 6, 0.05), transparent 60%),
+    radial-gradient(760px 620px at 8% 32%, rgba(180, 160, 120, 0.14), transparent 62%),
     var(--color-ink-950);
   color: var(--color-mist-100);
   font-family: var(--font-sans);
@@ -176,8 +176,8 @@ body {
 }
 
 ::selection {
-  background: rgba(34, 211, 238, 0.4);
-  color: #06202a;
+  background: rgba(45, 212, 191, 0.35);
+  color: #042f2b;
 }
 
 .negative ::selection {
@@ -186,7 +186,7 @@ body {
 }
 
 :focus-visible {
-  outline: 2px solid rgba(34, 211, 238, 0.9);
+  outline: 2px solid rgba(13, 148, 136, 0.9);
   outline-offset: 3px;
   border-radius: 6px;
 }
@@ -223,21 +223,21 @@ body {
   line-height: 1.65;
 }
 
-/* Premium primary button: subtle top highlight + soft cyan glow. */
+/* Premium primary button: subtle top highlight + soft teal glow. */
 .btn-primary {
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.35),
-    0 10px 24px -12px rgb(6 182 212 / 0.6);
+    0 10px 24px -12px rgb(13 148 136 / 0.55);
 }
 .btn-primary:hover {
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.35),
-    0 14px 30px -12px rgb(6 182 212 / 0.7);
+    0 14px 30px -12px rgb(13 148 136 / 0.65);
 }
 .btn-primary:active {
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.25),
-    0 6px 16px -12px rgb(6 182 212 / 0.5);
+    0 6px 16px -12px rgb(13 148 136 / 0.45);
 }
 
 /* Negative mode: the glow follows the inverted accent. */
