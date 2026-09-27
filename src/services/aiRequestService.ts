@@ -40,7 +40,7 @@ function toMockEvaluation(result: EvaluationResult): MockEvaluation {
   });
   return {
     decision: result.masked ? 'MASK' : decisionMap[result.decision],
-    reason: result.reasons.join(' ') || 'Evaluated by the Data Control Plane policy engine.',
+    reason: result.reasons.join(' ') || 'Evaluated by the AllowBase policy engine.',
     detected,
     policy: result.policies_triggered[0] ?? 'Default policy',
     approvalRequired: result.approval_required ?? false,

@@ -72,12 +72,12 @@ export function Navbar({ onSignIn, onProfile }: NavbarProps) {
       }`}
     >
       <nav aria-label="Primary" className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link to="/" className="flex items-center gap-2.5" aria-label="Data Control Plane home">
+        <Link to="/" className="flex items-center gap-2.5" aria-label="AllowBase home">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-ink-800">
             <ShieldCheck size={16} className="text-accent-600" />
           </span>
           <span className="text-[12px] font-bold uppercase tracking-[0.16em] text-mist-100">
-            Data Control Plane
+            AllowBase
           </span>
         </Link>
 

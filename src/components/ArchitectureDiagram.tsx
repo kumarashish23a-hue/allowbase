@@ -122,7 +122,7 @@ export function ArchitectureDiagram() {
 
         <div className="rounded-lg border border-accent-400/30 bg-ink-950/70 p-5 sm:p-6">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-600">Data Control Plane</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-600">AllowBase</p>
             <button
               type="button"
               onClick={restart}

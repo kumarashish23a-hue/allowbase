@@ -696,7 +696,7 @@ export function SetupModal({ open, onClose, onSignIn, onTrySimulator, blocking =
             title: 'Agents',
             desc: status.hasAgent
               ? 'At least one agent is registered and governed by policy.'
-              : 'Register the AI agents or apps that will call through the control plane.',
+              : 'Register the AI agents or apps that will call through AllowBase.',
             cta: 'Manage agents',
             hash: '#agents',
           },
@@ -870,7 +870,7 @@ export function SetupModal({ open, onClose, onSignIn, onTrySimulator, blocking =
             <div className="mt-6 rounded-2xl border border-mint-400/30 bg-mint-400/10 p-6 text-center">
               <CheckCircle2 size={36} className="mx-auto text-mint-300" />
               <p className="mt-3 text-lg font-semibold text-mist-100">
-                You're all set — the control plane is live.
+                You're all set — AllowBase is live.
               </p>
               <p className="mt-1 text-sm text-mist-400">
                 Connect → configure → protect → monitor. Every AI call is now on the record.

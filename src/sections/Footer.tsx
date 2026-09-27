@@ -48,7 +48,7 @@ export function Footer() {
                 <ShieldCheck size={18} className="text-accent-600" />
               </span>
               <span className="text-[13px] font-bold uppercase tracking-[0.18em] text-mist-100">
-                Data Control Plane
+                AllowBase
               </span>
             </div>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-mist-500">
@@ -81,7 +81,7 @@ export function Footer() {
           </div>
         </div>
         <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-line pt-6 sm:flex-row sm:items-center">
-          <p className="text-xs text-mist-600">© 2026 Data Control Plane. Prototype concept.</p>
+          <p className="text-xs text-mist-600">© 2026 AllowBase. Prototype concept.</p>
           <div className="flex gap-6">
             {[
               { label: 'Privacy', href: '/#top' },

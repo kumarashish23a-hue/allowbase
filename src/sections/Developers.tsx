@@ -5,7 +5,7 @@ import { Reveal } from '../components/Reveal';
 import { SectionHeading } from '../components/SectionHeading';
 import { developerRequest, developerResponse } from '../data/mock';
 
-const architecture = ['Application', 'Data Control Plane API', 'Policy Engine', 'Data Classification', 'AI Provider'];
+const architecture = ['Application', 'AllowBase API', 'Policy Engine', 'Data Classification', 'AI Provider'];
 
 function CodeBlock({ title, code, id }: { title: string; code: string; id: string }) {
   const [copied, setCopied] = useState(false);

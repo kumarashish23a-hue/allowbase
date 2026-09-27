@@ -1,4 +1,4 @@
-/** Database row shapes for the Data Control Plane Supabase schema. */
+/** Database row shapes for the AllowBase Supabase schema. */
 
 export interface OrganizationRow {
   id: string;

@@ -119,7 +119,7 @@ export function Dashboard() {
               {live ? 'LIVE' : 'SIMULATED'}
             </span>
           </p>
-          <h3 className="mt-1 text-xl font-semibold tracking-tight text-mist-100">One control plane for your AI data.</h3>
+          <h3 className="mt-1 text-xl font-semibold tracking-tight text-mist-100">One home base for your AI data.</h3>
         </div>
         <div className="flex rounded-xl border border-line bg-ink-950/60 p-1" role="tablist" aria-label="Time range">
           {ranges.map((item) => (

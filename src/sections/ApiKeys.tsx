@@ -180,7 +180,7 @@ export function ApiKeys() {
       <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
         <SectionHeading
           eyebrow="API keys"
-          title="The front door to your control plane."
+          title="The front door to AllowBase."
           description="Machine keys let your backend ask for a decision before calling a model. A key authenticates the organization; every call runs the same deterministic policy engine and lands in the audit log."
         />
 
@@ -229,7 +229,7 @@ export function ApiKeys() {
                   ) : null}
                   {keys.length === 0 ? (
                     <p className="px-5 py-8 text-center text-sm text-mist-500">
-                      No keys yet. Create one to let your backend ask the control plane for decisions.
+                      No keys yet. Create one to let your backend ask AllowBase for decisions.
                     </p>
                   ) : (
                     <ul className="divide-y divide-line">

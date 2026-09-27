@@ -9,7 +9,7 @@ export function UseCases() {
         <SectionHeading
           eyebrow="Solutions"
           title="Built for every team adopting AI."
-          description="The same control plane, applied to the risks each team cares about most."
+          description="One platform, applied to the risks each team cares about most."
         />
         <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {useCases.map((useCase, index) => (
