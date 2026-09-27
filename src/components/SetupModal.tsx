@@ -813,9 +813,27 @@ export function SetupModal({ open, onClose, onSignIn, onTrySimulator, blocking =
 
   return (
     <Modal open={open} onClose={onClose} dismissable={!blocking} title="Workspace setup" subtitle={subtitle} wide>
-      {loading || !status ? (
+      {loading ? (
         <div className="flex items-center justify-center gap-2 py-10 text-sm text-mist-400">
           <Loader2 size={16} className="animate-spin" /> Checking your setup…
+        </div>
+      ) : !status ? (
+        <div className="py-10 text-center">
+          <p className="text-sm text-rose-400">{error ?? 'Could not check your setup status.'}</p>
+          <button type="button" onClick={() => void refresh()} className={`${secondaryBtn} mt-5`}>
+            <RefreshCw size={15} /> Re-check
+          </button>
+          {blocking ? (
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="text-sm text-mist-500 underline-offset-2 transition hover:text-mist-300 hover:underline"
+              >
+                Skip for now — go to dashboard
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : !status.signedIn ? (
         <div>
