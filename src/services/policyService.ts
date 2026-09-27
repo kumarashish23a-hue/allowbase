@@ -8,6 +8,7 @@ const effectMap: Record<string, Decision> = {
   mask: 'MASK',
   redact: 'REDACT',
   review: 'REDACT',
+  require_approval: 'REDACT',
 };
 
 function conditionValue(value: unknown): string {
@@ -32,11 +33,39 @@ export function toPolicy(row: PolicyRow): Policy {
   };
 }
 
+export type PolicyAction = 'allow' | 'block' | 'mask' | 'redact' | 'require_approval';
+export type PolicyOperator = 'equals' | 'not_equals' | 'in' | 'not_in';
+
+export interface PolicyConditionDraft {
+  field: string;
+  operator: PolicyOperator;
+  value: string | string[] | boolean;
+}
+
 export interface PolicyDraft {
   name: string;
   description: string;
-  effect: Decision;
-  conditions: { field: string; operator: string; value: string }[];
+  action: PolicyAction;
+  /** Lower numbers are evaluated first; the first matching policy wins. */
+  priority: number;
+  conditions: PolicyConditionDraft[];
+}
+
+/** Encode a draft condition value the way the engine's policy_condition_matches expects. */
+export function encodeValue(field: string, operator: PolicyOperator, value: string | string[] | boolean): unknown {
+  if (operator === 'in' || operator === 'not_in') {
+    const arr = Array.isArray(value)
+      ? value
+      : String(value)
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+    return arr;
+  }
+  if (field === 'ai.is_external' || field === 'ai.is_approved') {
+    return value === true || value === 'true';
+  }
+  return Array.isArray(value) ? (value[0] ?? '') : value;
 }
 
 /** Policies for the active organization; mock list when offline. */
@@ -53,7 +82,7 @@ export async function listPolicies(): Promise<Policy[]> {
   return (data as PolicyRow[]).map(toPolicy);
 }
 
-const actionMap: Record<Decision, string> = {
+const actionMap: Record<Decision, PolicyAction> = {
   ALLOW: 'allow',
   BLOCK: 'block',
   MASK: 'mask',
@@ -65,25 +94,34 @@ export async function createPolicy(draft: PolicyDraft): Promise<Policy> {
   const supabase = getSupabase();
   const orgId = await getActiveOrganizationId();
   if (!supabase || !orgId) throw new Error('Supabase is not configured.');
+  if (!draft.name.trim()) throw new Error('Give the policy a name.');
+  // Empty conditions are allowed (matches every request) — the Admin
+  // quick-create uses this; the builder modal requires at least one.
+  const priority = Number.isFinite(draft.priority) ? Math.max(0, Math.floor(draft.priority)) : 100;
   const { data, error } = await supabase
     .from('policies')
     .insert({
       organization_id: orgId,
-      name: draft.name,
-      description: draft.description,
+      name: draft.name.trim(),
+      description: draft.description.trim() || null,
       status: 'active',
-      priority: 100,
+      priority,
       rule: {
         conditions: draft.conditions.map((condition) => ({
           field: condition.field,
           operator: condition.operator,
-          value: condition.value,
+          value: encodeValue(condition.field, condition.operator, condition.value),
         })),
       },
-      action: actionMap[draft.effect],
+      action: draft.action,
     })
     .select('*')
     .single();
   if (error) throw new Error('Could not create the policy.');
   return toPolicy(data as PolicyRow);
+}
+
+/** Map a UI Decision to the database action vocabulary (for legacy callers). */
+export function decisionToAction(decision: Decision): PolicyAction {
+  return actionMap[decision];
 }

@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { getActiveOrganizationId, getLocalUserId, getSupabase, getSupabaseUrl, isSupabaseConfigured } from '../lib/supabase';
 import { createAgent, deleteAgent, listAgents, setAgentStatus } from '../services/aiAgentService';
 import { createApiKey, listApiKeys, revokeApiKey, type ApiKeyItem } from '../services/apiKeysService';
-import { createPolicy, type PolicyDraft } from '../services/policyService';
+import { createPolicy, decisionToAction, type PolicyDraft } from '../services/policyService';
 import type { OrganizationRow } from '../lib/db';
 import type { Agent } from '../types';
 import {
@@ -593,7 +593,8 @@ export function Admin() {
                   const draft: PolicyDraft = {
                     name: newPolicy.name.trim(),
                     description: newPolicy.description.trim(),
-                    effect: newPolicy.effect,
+                    action: decisionToAction(newPolicy.effect),
+                    priority: 100,
                     conditions: [],
                   };
                   if (!draft.name) return;

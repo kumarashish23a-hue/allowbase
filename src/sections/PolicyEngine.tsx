@@ -1,10 +1,10 @@
 import { Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { CreatePolicyModal } from '../components/PolicyModals';
+import { PolicyBuilderModal } from '../components/PolicyModals';
 import { Reveal } from '../components/Reveal';
 import { SectionHeading } from '../components/SectionHeading';
 import { isSupabaseConfigured } from '../lib/supabase';
-import { createPolicy, listPolicies } from '../services/policyService';
+import { createPolicy, listPolicies, type PolicyDraft } from '../services/policyService';
 import type { Policy } from '../types';
 
 const effectTone: Record<Policy['effect'], string> = {
@@ -32,22 +32,12 @@ export function PolicyEngine() {
     };
   }, []);
 
-  const handleCreate = async (policy: Policy) => {
-    if (isSupabaseConfigured()) {
-      try {
-        const created = await createPolicy({
-          name: policy.name,
-          description: policy.description,
-          effect: policy.effect,
-          conditions: policy.conditions,
-        });
-        setPolicies((current) => [created, ...current]);
-        return;
-      } catch {
-        /* fall through to local state */
-      }
+  const handleCreate = async (draft: PolicyDraft) => {
+    if (!isSupabaseConfigured()) {
+      throw new Error('Sign in to save real policies to your workspace.');
     }
-    setPolicies((current) => [policy, ...current]);
+    const created = await createPolicy(draft);
+    setPolicies((current) => [created, ...current]);
   };
 
   return (
@@ -110,12 +100,10 @@ export function PolicyEngine() {
         </button>
       </Reveal>
 
-      <CreatePolicyModal
+      <PolicyBuilderModal
         open={open}
         onClose={() => setOpen(false)}
-        onCreate={(policy) => {
-          void handleCreate(policy);
-        }}
+        onCreate={(draft) => handleCreate(draft)}
       />
     </section>
   );
