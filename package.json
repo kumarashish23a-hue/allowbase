@@ -24,6 +24,8 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
+    "@reticlehq/react": "^3.3.0",
+    "@reticlehq/vite-plugin": "^3.3.0",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",

@@ -2,8 +2,9 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig } from 'vite'
 
+import { reticle } from '@reticlehq/vite-plugin';
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [reticle(), react(), tailwindcss()],
   build: {
     rolldownOptions: {
       output: {
