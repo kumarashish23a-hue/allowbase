@@ -54,3 +54,8 @@ export async function getActiveOrganizationId(): Promise<string | null> {
 export function clearOrgCache(): void {
   cachedOrgId = undefined;
 }
+
+/** Pin the active organization (e.g. when an admin switches clients). */
+export function setActiveOrganizationId(orgId: string | null): void {
+  cachedOrgId = orgId ?? undefined;
+}

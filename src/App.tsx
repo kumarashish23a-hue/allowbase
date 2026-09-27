@@ -13,6 +13,7 @@ const ProfileModal = lazy(() => import('./components/ProfileModal').then((m) => 
 const RequestSimulator = lazy(() =>
   import('./components/RequestSimulator').then((m) => ({ default: m.RequestSimulator })),
 );
+const Admin = lazy(() => import('./pages/Admin').then((m) => ({ default: m.Admin })));
 const SetupModal = lazy(() => import('./components/SetupModal').then((m) => ({ default: m.SetupModal })));
 const SignInModal = lazy(() => import('./components/SignInModal').then((m) => ({ default: m.SignInModal })));
 
@@ -88,6 +89,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Home onDemo={openSimulator} />} />
               <Route path="/app" element={<Console onSimulate={openSimulator} />} />
+              <Route path="/admin" element={<Admin />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </main>
