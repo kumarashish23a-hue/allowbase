@@ -1,7 +1,7 @@
 import { Bot, Building2, KeyRound, Loader2, Pencil, Plus, ShieldAlert, Trash2, Users } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getActiveOrganizationId, getLocalUserId, getSupabase, isSupabaseConfigured } from '../lib/supabase';
+import { getActiveOrganizationId, getLocalUserId, getSupabase, getSupabaseUrl, isSupabaseConfigured } from '../lib/supabase';
 import { listAgents, setAgentStatus } from '../services/aiAgentService';
 import { listApiKeys, revokeApiKey, type ApiKeyItem } from '../services/apiKeysService';
 import { createPolicy, type PolicyDraft } from '../services/policyService';
@@ -72,13 +72,13 @@ export function Admin() {
   const testConnection = useCallback(async () => {
     setConnTest('Testing…');
     try {
-      const supabase = getSupabase();
-      if (!supabase) {
+      const baseUrl = getSupabaseUrl();
+      if (!baseUrl) {
         setConnTest('Supabase is not configured.');
         return;
       }
       const started = Date.now();
-      const res = await fetch(`${supabase.supabaseUrl}/rest/v1/`, {
+      const res = await fetch(`${baseUrl}/rest/v1/`, {
         signal: AbortSignal.timeout(10000),
       });
       setConnTest(
