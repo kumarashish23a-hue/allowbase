@@ -83,6 +83,23 @@ export async function getEnforcementMode(orgId: string): Promise<EnforcementMode
 }
 
 /**
+ * Save the workspace's industry label inside organizations.settings.
+ * Owner/admin only (enforced by RLS). Never throws for missing settings.
+ */
+export async function setOrgIndustry(orgId: string, industry: string): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const { data: current } = await supabase
+    .from('organizations')
+    .select('settings')
+    .eq('id', orgId)
+    .maybeSingle();
+  const next = { ...((current?.settings ?? {}) as Record<string, unknown>), industry: industry.trim() };
+  const { error } = await supabase.from('organizations').update({ settings: next }).eq('id', orgId);
+  if (error) throw new Error('Could not save the industry.');
+}
+
+/**
  * Set a workspace's enforcement mode. Owner/admin only (enforced by RLS).
  * Switching to monitor never deletes data; switching back to enforce
  * immediately applies policy decisions again.

@@ -269,7 +269,7 @@ export function DataSources() {
   };
 
   return (
-    <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
+    <section id="data-sources" className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8 lg:py-28">
       <SectionHeading
         eyebrow="Data sources"
         title="Know where your data lives."

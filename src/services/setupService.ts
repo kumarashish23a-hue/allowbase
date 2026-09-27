@@ -13,9 +13,18 @@ export interface SetupStatus {
   signedIn: boolean;
   hasOrg: boolean;
   orgName: string | null;
+  /** Optional industry label stored on organizations.settings. */
+  industry: string | null;
+  enforcementMode: 'monitor' | 'enforce' | null;
   migrations: MigrationStatus;
   /** True when the org already has models, assets, or policies. */
   hasData: boolean;
+  /** AI models registered for the org (destinations the policies can target). */
+  models: { name: string; provider: string | null }[];
+  /** True when at least one data source is connected. */
+  hasDataSource: boolean;
+  /** True when at least one agent is registered. */
+  hasAgent: boolean;
   functions: Record<'evaluate-ai-request' | 'ingest-event', EdgeFunctionStatus>;
   /** True when at least one non-revoked API key exists. */
   hasApiKey: boolean;
@@ -67,8 +76,13 @@ export async function getSetupStatus(): Promise<SetupStatus> {
     signedIn: false,
     hasOrg: false,
     orgName: null,
+    industry: null,
+    enforcementMode: null,
     migrations: { state: 'unknown', missingFiles: [] },
     hasData: false,
+    models: [],
+    hasDataSource: false,
+    hasAgent: false,
     functions: { 'evaluate-ai-request': 'unknown', 'ingest-event': 'unknown' },
     hasApiKey: false,
     hasRequests: false,
@@ -90,7 +104,7 @@ export async function getSetupStatus(): Promise<SetupStatus> {
   if (!first) return { ...fallback, signedIn: true };
 
   const orgId = first.organization_id;
-  const [models, assets, policies, keys, requests, migrations, evaluateFn, ingestFn] = await Promise.all([
+  const [models, assets, policies, keys, requests, migrations, evaluateFn, ingestFn, orgRow, modelRows, sourceCount, agentCount] = await Promise.all([
     supabase.from('ai_models').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
     supabase.from('data_assets').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
     supabase.from('policies').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
@@ -103,15 +117,28 @@ export async function getSetupStatus(): Promise<SetupStatus> {
     checkMigrations(supabase),
     probeEdgeFunction(EDGE_FUNCTION_NAME),
     probeEdgeFunction(INGEST_FUNCTION_NAME),
+    supabase.from('organizations').select('settings,enforcement_mode').eq('id', orgId).maybeSingle(),
+    supabase.from('ai_models').select('name,provider').eq('organization_id', orgId).limit(10),
+    supabase.from('data_sources').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
+    supabase.from('ai_agents').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
   ]);
   const hasData = (models.count ?? 0) + (assets.count ?? 0) + (policies.count ?? 0) > 0;
+  const settings = (orgRow.data?.settings ?? {}) as Record<string, unknown>;
   return {
     configured: true,
     signedIn: true,
     hasOrg: true,
     orgName: first.organizations?.name ?? null,
+    industry: typeof settings.industry === 'string' ? (settings.industry as string) : null,
+    enforcementMode:
+      orgRow.data?.enforcement_mode === 'enforce' ? 'enforce'
+      : orgRow.data?.enforcement_mode === 'monitor' ? 'monitor'
+      : null,
     migrations,
     hasData,
+    models: (modelRows.data ?? []).map((m) => ({ name: m.name, provider: m.provider })),
+    hasDataSource: (sourceCount.count ?? 0) > 0,
+    hasAgent: (agentCount.count ?? 0) > 0,
     functions: { 'evaluate-ai-request': evaluateFn, 'ingest-event': ingestFn },
     hasApiKey: (keys.count ?? 0) > 0,
     hasRequests: (requests.count ?? 0) > 0,
