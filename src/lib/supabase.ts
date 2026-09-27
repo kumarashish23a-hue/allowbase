@@ -29,17 +29,15 @@ let cachedOrgId: string | null | undefined;
 export async function getActiveOrganizationId(): Promise<string | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
+  const userId = await getLocalUserId();
+  if (!userId) {
     return null;
   }
   if (cachedOrgId !== undefined) return cachedOrgId;
   const { data, error } = await supabase
     .from('organization_members')
     .select('organization_id')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .eq('status', 'active')
     .order('created_at', { ascending: true })
     .limit(1)
@@ -53,6 +51,21 @@ export async function getActiveOrganizationId(): Promise<string | null> {
 
 export function clearOrgCache(): void {
   cachedOrgId = undefined;
+}
+
+/**
+ * Current user id from the local session. Fast and never hits the network —
+ * unlike auth.getUser(), which can hang during multi-tab token refresh races.
+ * Server-side RLS still validates the token on every query, so this is only
+ * ever used to decide what to ask for, never what to allow.
+ */
+export async function getLocalUserId(): Promise<string | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  return session?.user?.id ?? null;
 }
 
 /** Pin the active organization (e.g. when an admin switches clients). */

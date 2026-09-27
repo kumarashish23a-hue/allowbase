@@ -1,7 +1,7 @@
 import { Bot, Building2, KeyRound, Loader2, Pencil, Plus, ShieldAlert, Trash2, Users } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getActiveOrganizationId, getSupabase, isSupabaseConfigured } from '../lib/supabase';
+import { getActiveOrganizationId, getLocalUserId, getSupabase, isSupabaseConfigured } from '../lib/supabase';
 import { listAgents, setAgentStatus } from '../services/aiAgentService';
 import { listApiKeys, revokeApiKey, type ApiKeyItem } from '../services/apiKeysService';
 import { createPolicy, type PolicyDraft } from '../services/policyService';
@@ -133,12 +133,12 @@ export function Admin() {
           return;
         }
         const supabase = getSupabase();
-        const {
-          data: { user },
-          error: userError,
-        } = await supabase!.auth.getUser();
-        if (userError) throw userError;
-        if (!user) {
+        if (!supabase) {
+          finish('denied', 'Supabase is not configured.');
+          return;
+        }
+        const userId = await getLocalUserId();
+        if (!userId) {
           finish('denied', null);
           return;
         }
