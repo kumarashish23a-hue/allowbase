@@ -1,6 +1,6 @@
 # Data Control Plane — Working Architecture
 
-*Based on inspection of the actual deployed implementation (frontend `2d2d498` lineage, Supabase backend migrations `001–009`, Edge Function `evaluate-ai-request`, Vercel deployment). Nothing below is assumed — every claim traces to code that was read.*
+*Based on inspection of the actual deployed implementation (frontend `2d2d498` lineage, Supabase backend migrations `001–009`, Edge Function `evaluate-ai-request`, Vercel deployment). Nothing below is assumed — every claim traces to code that was read. For the security-foundation assessment (migrations `010–012`, content detection), see `docs/ARCHITECTURE_ASSESSMENT.md`, `docs/GAP_ANALYSIS.md`, and `docs/IMPLEMENTATION_PLAN.md`.*
 
 ---
 

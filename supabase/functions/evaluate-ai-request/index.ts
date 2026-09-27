@@ -12,6 +12,7 @@
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
+import { detectSensitiveContent } from '../_shared/detect.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -27,7 +28,12 @@ interface EvaluatePayload {
   user_id?: string | null;
   agent_id?: string | null;
   request_type?: string;
+  /** Optional free-text content, scanned in-memory for PII/secrets (never stored). */
+  content?: string | null;
 }
+
+/** Max content size scanned for PII/secrets (DoS guard for the regex scan). */
+const MAX_CONTENT_LENGTH = 100_000;
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -122,6 +128,16 @@ serve(async (req: Request): Promise<Response> => {
   const allowedTypes = ['chat', 'completion', 'agent_action', 'data_access', 'tool_call'];
   if (!allowedTypes.includes(request_type)) return badRequest('Invalid request_type.');
 
+  // Optional free-text content: scanned in-memory, never stored or logged.
+  let detections: ReturnType<typeof detectSensitiveContent> = [];
+  if (body.content !== undefined && body.content !== null) {
+    if (typeof body.content !== 'string') return badRequest('content must be a string when provided.');
+    if (body.content.length > MAX_CONTENT_LENGTH) {
+      return badRequest(`content must be at most ${MAX_CONTENT_LENGTH} characters.`);
+    }
+    detections = detectSensitiveContent(body.content);
+  }
+
   // 3. Run the secure database logic with the caller's identity.
   const { data, error } = await supabase.rpc('evaluate_ai_request', {
     p_organization_id: organization_id,
@@ -131,6 +147,7 @@ serve(async (req: Request): Promise<Response> => {
     p_user_id: user_id,
     p_agent_id: agent_id,
     p_request_type: request_type,
+    p_content_findings: detections,
   });
 
   if (error) {

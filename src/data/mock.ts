@@ -361,7 +361,8 @@ x-api-key: dcp_live_...
   "model_name": "support-copilot",
   "purpose": "customer-support",
   "data_asset_ids": ["<asset-uuid>"],
-  "agent_name": "triage-bot"
+  "agent_name": "triage-bot",
+  "content": "Summarize this ticket..."  // optional: scanned for PII/secrets, never stored
 }`;
 
 export const developerResponse = `{
@@ -377,6 +378,9 @@ export const developerResponse = `{
     "ai_destination": true,
     "purpose": true
   },
+  "detections": [
+    { "detector": "regex-v1", "category": "email", "severity": "medium", "confidence": 0.9, "count": 2 }
+  ],
   "event_id": "evt_9f32c1",
   "idempotent_replay": false
 }`;

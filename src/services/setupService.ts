@@ -28,12 +28,13 @@ export const INGEST_FUNCTION_NAME = 'ingest-event';
 const EDGE_FUNCTION_CODE_URL =
   'https://raw.githubusercontent.com/kumarashish23a-hue/dataplane/main/supabase/functions/evaluate-ai-request/index.ts';
 
-/** Tables that prove their migration has been applied, and the file to run if not. */
-const MIGRATION_TABLES: { table: string; file: string }[] = [
+/** Tables (and columns) that prove their migration has been applied, and the file to run if not. */
+const MIGRATION_TABLES: { table: string; column?: string; file: string }[] = [
   { table: 'organizations', file: '001_core.sql → 009_seed.sql' },
   { table: 'ai_requests', file: '005_requests.sql' },
   { table: 'approval_requests', file: '010_hardening.sql' },
   { table: 'api_keys', file: '011_api_keys.sql' },
+  { table: 'ai_requests', column: 'detection_findings', file: '012_content_detection.sql' },
 ];
 
 /** Check which migrations are missing by probing for their tables. Never throws. */
@@ -41,10 +42,11 @@ async function checkMigrations(
   supabase: NonNullable<ReturnType<typeof getSupabase>>,
 ): Promise<MigrationStatus> {
   const missingFiles: string[] = [];
-  for (const { table, file } of MIGRATION_TABLES) {
-    const { error } = await supabase.from(table).select('id', { head: true }).limit(1);
+  for (const { table, column, file } of MIGRATION_TABLES) {
+    const { error } = await supabase.from(table).select(column ?? 'id', { head: true }).limit(1);
     if (!error) continue;
-    if ((error as { code?: string }).code === '42P01') {
+    // 42P01 = table missing, 42703 = column missing (a later migration not applied).
+    if ((error as { code?: string }).code === '42P01' || (error as { code?: string }).code === '42703') {
       if (!missingFiles.includes(file)) missingFiles.push(file);
       continue;
     }
@@ -274,6 +276,19 @@ export async function loadStarterData(): Promise<StarterDataSummary> {
     .eq('organization_id', orgId);
   if ((policyCount ?? 0) === 0) {
     const { data, error } = await supabase.from('policies').insert([
+      {
+        organization_id: orgId,
+        name: 'Block Secrets in AI Content',
+        description: 'API keys, private keys, and passwords detected in request content are blocked outright.',
+        status: 'active',
+        priority: 5,
+        rule: {
+          conditions: [
+            { field: 'content.category', operator: 'in', value: ['secret', 'private_key', 'api_key'] },
+          ],
+        },
+        action: 'block',
+      },
       {
         organization_id: orgId,
         name: 'Customer PII Protection',

@@ -17,14 +17,19 @@
 //     "data_asset_ids": ["<uuid>"],    // optional
 //     "agent_name": "triage-bot",      // optional; unknown names fail closed
 //     "request_type": "api"            // optional
+//     "content": "email me at..."      // optional, scanned for PII/secrets (max 100k chars)
 //   }
 //
+// The raw content is scanned in-memory and never stored or logged — only
+// detection findings (category/severity/confidence/count) reach the database.
+//
 // Response: { request_id, decision, risk, reasons, policies_triggered, checks,
-//             event_id, idempotent_replay }
+//             detections, event_id, idempotent_replay }
 //   decision: "allow" | "block" | "review" | "require_approval"
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
+import { detectSensitiveContent } from '../_shared/detect.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -44,7 +49,11 @@ interface IngestPayload {
   data_asset_ids?: unknown;
   agent_name?: unknown;
   request_type?: unknown;
+  content?: unknown;
 }
+
+/** Max content size scanned for PII/secrets (DoS guard for the regex scan). */
+const MAX_CONTENT_LENGTH = 100_000;
 
 function json(status: number, body: Record<string, unknown>): Response {
   return new Response(JSON.stringify(body), {
@@ -155,6 +164,20 @@ serve(async (req: Request): Promise<Response> => {
     requestType = body.request_type;
   }
 
+  // Optional free-text content (prompt, payload, document excerpt). Scanned
+  // in-memory for PII/secrets; the raw text never reaches the database.
+  let content: string | null = null;
+  if (body.content !== undefined && body.content !== null) {
+    if (typeof body.content !== 'string') {
+      return json(400, { error: 'content must be a string when provided.' });
+    }
+    if (body.content.length > MAX_CONTENT_LENGTH) {
+      return json(400, { error: `content must be at most ${MAX_CONTENT_LENGTH} characters.` });
+    }
+    content = body.content;
+  }
+  const detections = content ? detectSensitiveContent(content) : [];
+
   // 3. Delegate to the database: key auth, idempotency, and evaluation all
   //    happen inside a single transaction in ingest_api_event.
   const supabase = createClient(supabaseUrl, serviceKey, {
@@ -174,6 +197,7 @@ serve(async (req: Request): Promise<Response> => {
     p_data_asset_ids: assetIds,
     p_agent_name: agentName,
     p_request_type: requestType,
+    p_content_findings: detections,
   });
 
   if (error) {

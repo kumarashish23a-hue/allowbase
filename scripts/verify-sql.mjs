@@ -79,7 +79,8 @@ const match = await db.query(
      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
      array['d0000000-0000-4000-8000-000000000001'::uuid],
      (select m from public.ai_models m where m.name='Claude'),
-     'Customer Analysis'
+     'Customer Analysis',
+     '[]'::jsonb
    ) as matched`
 );
 console.log('condition matcher (expect true):', match.rows[0].matched);
@@ -90,7 +91,8 @@ const noMatch = await db.query(
      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
      array['d0000000-0000-4000-8000-000000000003'::uuid],
      (select m from public.ai_models m where m.name='Internal AI'),
-     'Customer Support'
+     'Customer Support',
+     '[]'::jsonb
    ) as matched`
 );
 console.log('condition matcher (expect true):', noMatch.rows[0].matched);
