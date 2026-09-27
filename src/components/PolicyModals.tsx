@@ -142,6 +142,14 @@ const FIELDS: FieldDef[] = [
     hint: 'Whether the AI system is on your approved list.',
   },
   {
+    value: 'ai.provider',
+    label: 'AI provider',
+    kind: 'multi',
+    options: ['openai', 'anthropic', 'google', 'azure', 'internal', 'custom'],
+    operators: ['in', 'not_in', 'equals', 'not_equals'],
+    hint: 'Who provides the AI — openai targets ChatGPT.',
+  },
+  {
     value: 'purpose',
     label: 'Purpose',
     kind: 'text',

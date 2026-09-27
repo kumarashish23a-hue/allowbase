@@ -1,5 +1,5 @@
 // Verifies the policy builder produces rules the REAL enforcement engine
-// (policy_condition_matches from supabase/migrations/012_content_detection.sql)
+// (policy_condition_matches from supabase/migrations/019_provider_condition.sql)
 // understands. Uses PGlite with stub tables + the exact function body.
 // Run: node scripts/verify-policy-builder.mjs
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -35,7 +35,7 @@ const jsFixed = js.replace(/'.\/stub-supabase.mjs'/g, `'${pathToFileURL(stubPath
 writeFileSync(tmpFile, jsFixed);
 const { encodeValue } = await import(pathToFileURL(tmpFile).href);
 
-// --- 2. PGlite with stub tables + the REAL function body from migration 012 ---
+// --- 2. PGlite with stub tables + the REAL function body from migration 019 ---
 const db = new PGlite();
 await db.exec(`
   create table public.data_assets (
@@ -47,14 +47,15 @@ await db.exec(`
   create table public.ai_models (
     id uuid primary key,
     is_external boolean not null,
-    is_approved boolean not null
+    is_approved boolean not null,
+    provider text not null default ''
   );
 `);
-const migration = readFileSync(new URL('../supabase/migrations/012_content_detection.sql', import.meta.url), 'utf8');
+const migration = readFileSync(new URL('../supabase/migrations/019_provider_condition.sql', import.meta.url), 'utf8');
 const start = migration.indexOf('create or replace function public.policy_condition_matches(');
 const endMarker = '\n$$;';
 const end = migration.indexOf(endMarker, start);
-if (start === -1 || end === -1) throw new Error('Could not extract policy_condition_matches from migration 012');
+if (start === -1 || end === -1) throw new Error('Could not extract policy_condition_matches from migration 019');
 await db.exec(migration.slice(start, end + endMarker.length));
 
 const ORG = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -63,8 +64,8 @@ const MODEL = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 await db.exec(`
   insert into public.data_assets (id, organization_id, classification, sensitivity_level)
   values ('${ASSET}', '${ORG}', 'confidential', 'high');
-  insert into public.ai_models (id, is_external, is_approved)
-  values ('${MODEL}', true, false);
+  insert into public.ai_models (id, is_external, is_approved, provider)
+  values ('${MODEL}', true, false, 'OpenAI');
 `);
 
 async function matches(field, operator, draftValue, findings = []) {
@@ -99,6 +100,19 @@ expect(await matches('purpose', 'equals', 'customer analysis') === true,
   'purpose is "customer analysis" matches case-insensitively');
 expect(await matches('purpose', 'in', 'Support, Customer Analysis') === true,
   'purpose is one of "Support, Customer Analysis" matches');
+// ai.provider: the ChatGPT-targeting condition (case-insensitive).
+expect(await matches('ai.provider', 'equals', 'openai') === true,
+  'ai.provider is "openai" matches model with provider "OpenAI"');
+expect(await matches('ai.provider', 'equals', 'anthropic') === false,
+  'ai.provider is "anthropic" does not match OpenAI model');
+expect(await matches('ai.provider', 'not_equals', 'anthropic') === true,
+  'ai.provider is not "anthropic" matches OpenAI model');
+expect(await matches('ai.provider', 'in', ['anthropic', 'openai']) === true,
+  'ai.provider is one of [anthropic, openai] matches OpenAI model');
+expect(await matches('ai.provider', 'not_in', ['anthropic', 'google']) === true,
+  'ai.provider is none of [anthropic, google] matches OpenAI model');
+expect(await matches('ai.provider', 'not_in', ['openai', 'google']) === false,
+  'ai.provider is none of [openai, google] does not match OpenAI model');
 // The old demo builder's vocabulary must NOT match (fail closed) — this is the
 // trap the new builder removes.
 expect(await matches('Data', '=', 'PII') === false,
