@@ -1,6 +1,7 @@
-import { Pause, Play, Plus, Trash2 } from 'lucide-react';
+import { FlaskConical, Pause, Play, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { PolicyBuilderModal } from '../components/PolicyModals';
+import { PolicyTestModal } from '../components/PolicyTestModal';
 import { Reveal } from '../components/Reveal';
 import { SectionHeading } from '../components/SectionHeading';
 import { isSupabaseConfigured } from '../lib/supabase';
@@ -23,6 +24,7 @@ const effectTone: Record<Policy['effect'], string> = {
 export function PolicyEngine() {
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [open, setOpen] = useState(false);
+  const [testPolicy, setTestPolicy] = useState<Policy | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [cardError, setCardError] = useState<string | null>(null);
 
@@ -134,6 +136,15 @@ export function PolicyEngine() {
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
+                    onClick={() => setTestPolicy(policy)}
+                    title="Test this policy against a sample request"
+                    aria-label={`Test ${policy.name}`}
+                    className="inline-flex items-center gap-1 rounded-lg border border-line px-2 py-1.5 text-xs text-mist-400 transition hover:border-line-strong hover:text-mist-100"
+                  >
+                    <FlaskConical size={12} /> Test
+                  </button>
+                  <button
+                    type="button"
                     disabled={busyId === policy.id}
                     onClick={() => void handleToggleStatus(policy)}
                     title={policy.status === 'active' ? 'Pause this policy' : 'Resume this policy'}
@@ -175,6 +186,11 @@ export function PolicyEngine() {
         open={open}
         onClose={() => setOpen(false)}
         onCreate={(draft) => handleCreate(draft)}
+      />
+      <PolicyTestModal
+        open={testPolicy !== null}
+        policy={testPolicy}
+        onClose={() => setTestPolicy(null)}
       />
     </section>
   );

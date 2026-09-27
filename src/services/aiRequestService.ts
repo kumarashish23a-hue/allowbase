@@ -176,3 +176,68 @@ export async function getAIRequests(limit = 25): Promise<AIRequestRow[]> {
     };
   });
 }
+
+export interface WorkspaceModel {
+  id: string;
+  name: string;
+  provider: string | null;
+}
+
+/** AI models in the active workspace, for the policy test picker. */
+export async function listModels(): Promise<WorkspaceModel[]> {
+  const supabase = getSupabase();
+  const orgId = await getActiveOrganizationId();
+  if (!supabase || !orgId) return [];
+  const { data, error } = await supabase
+    .from('ai_models')
+    .select('id,name,provider')
+    .eq('organization_id', orgId)
+    .order('name');
+  if (error) throw new Error('Could not load AI models.');
+  return (data ?? []) as WorkspaceModel[];
+}
+
+/**
+ * Register an AI model in the active workspace with one click.
+ * RLS: owner, admin, or security only.
+ */
+export async function registerModel(name: string, provider: string): Promise<void> {
+  const supabase = getSupabase();
+  const orgId = await getActiveOrganizationId();
+  if (!supabase || !orgId) throw new Error('Sign in to register a model.');
+  const identifier = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'model';
+  const { error } = await supabase.from('ai_models').insert({
+    organization_id: orgId,
+    name,
+    provider,
+    model_identifier: identifier,
+    model_type: 'chat',
+    is_approved: true,
+    is_external: true,
+    risk_level: 'medium',
+  });
+  if (error) throw new Error('Could not register the model. Only owners, admins, or security can do this.');
+}
+
+/**
+ * Probe whether the live database understands the `ai.provider` condition
+ * (migration 019). Calls the real engine with a synthetic model — no writes,
+ * no side effects. Returns false when the migration has not been applied.
+ */
+export async function isProviderConditionSupported(): Promise<boolean> {
+  const supabase = getSupabase();
+  const orgId = await getActiveOrganizationId();
+  if (!supabase || !orgId) return false;
+  const { data, error } = await supabase.rpc('policy_condition_matches', {
+    p_field: 'ai.provider',
+    p_operator: 'equals',
+    p_value: JSON.stringify('openai'),
+    p_org_id: orgId,
+    p_asset_ids: [],
+    p_model: { provider: 'OpenAI', is_external: true, is_approved: true },
+    p_purpose: '',
+    p_content_findings: [],
+  });
+  if (error) return false;
+  return data === true;
+}
