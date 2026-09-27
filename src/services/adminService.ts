@@ -62,19 +62,42 @@ function requireClient() {
 /** Members of an organization with their profile names. RLS scopes visibility. */
 export async function listMembers(orgId: string): Promise<AdminMember[]> {
   const supabase = requireClient();
-  const { data, error } = await supabase
+  // No FK exists between organization_members and profiles, so this is two
+  // queries: member rows first (members_select_member allows org members to
+  // read them), then names (needs 013_admin_member_reads.sql for non-own rows).
+  const { data: memberRows, error } = await supabase
     .from('organization_members')
-    .select('id,user_id,role,status,created_at,profiles(full_name)')
+    .select('id,user_id,role,status,created_at')
     .eq('organization_id', orgId)
     .order('created_at', { ascending: true });
   if (error) throw new Error('Could not load members.');
-  return (data ?? []).map((row) => ({
-    id: row.id as string,
-    user_id: row.user_id as string,
-    role: row.role as string,
-    status: row.status as string,
-    full_name: (row.profiles as { full_name?: string | null } | null)?.full_name ?? null,
-    created_at: row.created_at as string,
+  const rows = (memberRows ?? []) as {
+    id: string;
+    user_id: string;
+    role: string;
+    status: string;
+    created_at: string;
+  }[];
+  const names: Record<string, string | null> = {};
+  if (rows.length > 0) {
+    const { data: profileRows } = await supabase
+      .from('profiles')
+      .select('id,full_name')
+      .in(
+        'id',
+        rows.map((row) => row.user_id),
+      );
+    for (const profile of (profileRows ?? []) as { id: string; full_name: string | null }[]) {
+      names[profile.id] = profile.full_name;
+    }
+  }
+  return rows.map((row) => ({
+    id: row.id,
+    user_id: row.user_id,
+    role: row.role,
+    status: row.status,
+    full_name: names[row.user_id] ?? null,
+    created_at: row.created_at,
   }));
 }
 

@@ -422,6 +422,13 @@ export function Admin() {
               </div>
             </div>
             <div className="mt-6 space-y-3">
+              {members.length > 0 && members.every((m) => !m.full_name) ? (
+                <p className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2.5 text-xs text-amber-400">
+                  Member names need one database update: run{' '}
+                  <span className="font-mono">supabase/migrations/013_admin_member_reads.sql</span>{' '}
+                  once in your Supabase SQL editor. The member list below works without it.
+                </p>
+              ) : null}
               {members.map((member) => (
                 <div
                   key={member.id}
@@ -429,7 +436,7 @@ export function Admin() {
                 >
                   <div>
                     <p className="text-sm font-medium text-mist-100">
-                      {member.full_name ?? 'Unnamed user'}
+                      {member.full_name ?? `User ${member.user_id.slice(0, 8)}`}
                     </p>
                     <p className="text-xs text-mist-500">
                       {member.status} · joined {new Date(member.created_at).toLocaleDateString()}
