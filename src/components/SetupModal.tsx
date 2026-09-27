@@ -35,7 +35,7 @@ import {
   INGEST_FUNCTION_NAME,
   PROVIDER_FUNCTION_NAME,
   getFunctionsDashboardUrl,
-  getSetupStatus,
+  getSetupStatusSafe,
   getSqlEditorUrl,
   loadStarterData,
   probeEdgeFunction,
@@ -119,7 +119,11 @@ export function SetupModal({ open, onClose, onSignIn, onTrySimulator, blocking =
     setLoading(true);
     setError(null);
     try {
-      const next = await getSetupStatus();
+      const next = await getSetupStatusSafe();
+      if (!next) {
+        setError('The setup check timed out. Check your connection and press Re-check.');
+        return;
+      }
       setStatus(next);
       // Always land on the first unfinished step.
       setStepIndex((current) => {

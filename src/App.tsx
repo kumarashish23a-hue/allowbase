@@ -5,7 +5,7 @@ import { Footer } from './sections/Footer';
 import { Home } from './pages/Home';
 import { Console } from './pages/Console';
 import { getActiveOrganization } from './services/organizationService';
-import { getSetupStatus, setupConnectComplete } from './services/setupService';
+import { getSetupStatusSafe, setupConnectComplete } from './services/setupService';
 import { initForceLogoutWatch } from './lib/forceLogout';
 import { ThemeProvider } from './theme';
 
@@ -63,7 +63,7 @@ function Shell() {
         setSetupOpen(true);
         return;
       }
-      const status = await getSetupStatus().catch(() => null);
+      const status = await getSetupStatusSafe().catch(() => null);
       if (!status || !setupConnectComplete(status)) {
         setSetupBlocking(true);
         setSetupOpen(true);

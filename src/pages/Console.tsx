@@ -25,7 +25,7 @@ import { GatewayTest } from '../components/GatewayTest';
 import { Dashboard } from '../components/Dashboard';
 import { SetupModal } from '../components/SetupModal';
 import { getActiveOrganizationId, getSupabase, isSupabaseConfigured } from '../lib/supabase';
-import { getSetupStatus, setupConnectComplete } from '../services/setupService';
+import { getSetupStatusSafe, setupConnectComplete } from '../services/setupService';
 import { getActiveOrganization, getMyOrganizationRole } from '../services/organizationService';
 import { getAIRequests, type AIRequestRow } from '../services/aiRequestService';
 import { listApprovals, type ApprovalItem } from '../services/approvalService';
@@ -251,7 +251,7 @@ export function Console({ onSimulate }: ConsoleProps) {
         } = await supabase!.auth.getSession();
         if (!session) return 'ready';
         if (window.sessionStorage.getItem('dcp-setup-skipped') === '1') return 'ready';
-        const status = await getSetupStatus().catch(() => null);
+        const status = await getSetupStatusSafe().catch(() => null);
         return status && setupConnectComplete(status) ? 'ready' : 'needs-setup';
       } catch {
         return 'ready';
@@ -267,7 +267,7 @@ export function Console({ onSimulate }: ConsoleProps) {
   /** After the blocking wizard closes: re-check; a skip is remembered for this tab session. */
   const handleWizardDone = async () => {
     try {
-      const status = await getSetupStatus().catch(() => null);
+      const status = await getSetupStatusSafe().catch(() => null);
       if (status && setupConnectComplete(status)) {
         setGate('ready');
         return;

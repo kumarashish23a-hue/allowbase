@@ -1,4 +1,4 @@
-import { getActiveOrganizationId, getSupabase, isSupabaseConfigured } from '../lib/supabase';
+import { getActiveOrganizationId, getLocalUserId, getSupabase, isSupabaseConfigured } from '../lib/supabase';
 
 export type EdgeFunctionStatus = 'deployed' | 'missing' | 'unknown';
 
@@ -52,6 +52,24 @@ export function setupConnectComplete(status: SetupStatus): boolean {
     (status.hasAgent || status.hasApiKey) &&
     status.enforcementMode !== null
   );
+}
+
+/**
+ * getSetupStatus() with a hard timeout. The status check fans out to several
+ * PostgREST queries and edge-function probes; any one of them can stall at
+ * the network level and hang the caller forever. Returns null on timeout so
+ * callers can fail open (dashboard) or show a retry instead of spinning.
+ */
+export async function getSetupStatusSafe(timeoutMs = 15000): Promise<SetupStatus | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const timeout = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), timeoutMs);
+    });
+    return await Promise.race([getSetupStatus(), timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 const EDGE_FUNCTION_CODE_URL =
   'https://raw.githubusercontent.com/kumarashish23a-hue/dataplane/main/supabase/functions/evaluate-ai-request/index.ts';
@@ -109,15 +127,16 @@ export async function getSetupStatus(): Promise<SetupStatus> {
   };
   const supabase = getSupabase();
   if (!supabase) return fallback;
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return fallback;
+  // getSession() reads the local session and never hangs; auth.getUser() hits
+  // the network and can stall during token-refresh races (same class of hang
+  // as the old admin gate). RLS still validates the token server-side.
+  const userId = await getLocalUserId();
+  if (!userId) return fallback;
 
   const { data: memberships } = await supabase
     .from('organization_members')
     .select('organization_id, organizations ( name )')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .eq('status', 'active')
     .limit(1);
   const first = (memberships as { organization_id: string; organizations: { name: string } | null }[] | null)?.[0];
