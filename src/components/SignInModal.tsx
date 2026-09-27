@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { consumeForceLogoutNotice } from '../lib/forceLogout';
 import { getSupabase, isSupabaseConfigured } from '../lib/supabase';
 import { createOrganization } from '../services/organizationService';
 import { Modal } from './Modal';
@@ -22,6 +23,13 @@ export function SignInModal({ open, onClose, onAuthSuccess }: SignInModalProps) 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  // If a workspace admin remotely signed this user out, say so when they return.
+  useEffect(() => {
+    if (open && consumeForceLogoutNotice()) {
+      setNotice('Your workspace admin signed you out. Sign in again to continue.');
+    }
+  }, [open ]);
 
   if (!configured) {
     return (

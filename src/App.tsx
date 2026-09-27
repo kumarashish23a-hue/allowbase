@@ -6,6 +6,7 @@ import { Home } from './pages/Home';
 import { Console } from './pages/Console';
 import { getActiveOrganization } from './services/organizationService';
 import { getSetupStatus } from './services/setupService';
+import { initForceLogoutWatch } from './lib/forceLogout';
 import { ThemeProvider } from './theme';
 
 // Modals are code-split: they load on demand instead of bloating the first paint.
@@ -39,6 +40,9 @@ function App() {
   const [signInOpen, setSignInOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
+
+  // Watch for a workspace admin remotely signing this user out.
+  useEffect(() => initForceLogoutWatch(), []);
 
   const openSimulator = () => setSimulatorOpen(true);
 

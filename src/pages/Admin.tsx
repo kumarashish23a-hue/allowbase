@@ -13,6 +13,7 @@ import {
   addMember,
   deleteOrganization,
   deletePolicy,
+  forceLogoutMember,
   getGateMembership,
   getMemberStats,
   listAdminPolicies,
@@ -560,6 +561,28 @@ export function Admin() {
                         </option>
                       ))}
                     </select>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            'Sign this member out on all their devices? They can sign back in afterwards.',
+                          )
+                        ) {
+                          void run(
+                            () =>
+                              activeOrgId
+                                ? forceLogoutMember(activeOrgId, member.id, member.user_id)
+                                : Promise.reject(new Error('No active client.')),
+                            'Sign-out requested. Their app will sign them out shortly.',
+                          );
+                        }
+                      }}
+                      className={btnGhost}
+                    >
+                      Log out
+                    </button>
                     <button
                       type="button"
                       disabled={busy}

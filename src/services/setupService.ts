@@ -35,6 +35,7 @@ const MIGRATION_TABLES: { table: string; column?: string; file: string }[] = [
   { table: 'approval_requests', file: '010_hardening.sql' },
   { table: 'api_keys', file: '011_api_keys.sql' },
   { table: 'ai_requests', column: 'detection_findings', file: '012_content_detection.sql' },
+  { table: 'organization_members', column: 'force_logout_at', file: '014_force_logout.sql' },
 ];
 
 /** Check which migrations are missing by probing for their tables. Never throws. */

@@ -1,4 +1,4 @@
-import { clearOrgCache, getSupabase, setActiveOrganizationId } from '../lib/supabase';
+import { clearOrgCache, getLocalUserId, getSupabase, setActiveOrganizationId } from '../lib/supabase';
 import { createOrganization } from './organizationService';
 
 export interface AdminMember {
@@ -231,4 +231,46 @@ export async function deletePolicy(policyId: string): Promise<void> {
   const supabase = requireClient();
   const { error } = await supabase.from('policies').delete().eq('id', policyId);
   if (error) throw new Error('Could not delete the policy.');
+}
+
+/**
+ * Remotely sign out a member: stamps force_logout_at on their membership and
+ * writes an audit row. Their app watches the flag and signs them out (on
+ * load, every minute, and on window focus). App-level enforcement only — the
+ * member's API token stays valid until it expires, and they can sign back
+ * in afterwards unless also removed.
+ */
+export async function forceLogoutMember(
+  orgId: string,
+  memberId: string,
+  targetUserId: string,
+): Promise<void> {
+  const supabase = requireClient();
+  const { error } = await supabase
+    .from('organization_members')
+    .update({ force_logout_at: new Date().toISOString() })
+    .eq('id', memberId);
+  if (error) {
+    if (/force_logout_at/.test(error.message)) {
+      throw new Error(
+        'Database update needed: run supabase/migrations/014_force_logout.sql once in the Supabase SQL editor.',
+      );
+    }
+    throw new Error('Could not sign out the member.');
+  }
+  // Audit it. Best-effort: a failed audit row must not undo the sign-out.
+  const callerId = await getLocalUserId().catch(() => null);
+  const { error: auditError } = await supabase.from('audit_logs').insert({
+    organization_id: orgId,
+    actor_user_id: callerId,
+    actor_type: 'user',
+    action: 'member.force_logout',
+    resource_type: 'organization_member',
+    resource_id: memberId,
+    result: 'success',
+    metadata: { target_user_id: targetUserId },
+  });
+  if (auditError) {
+    console.warn('[admin] force-logout audit insert failed:', auditError.message);
+  }
 }
