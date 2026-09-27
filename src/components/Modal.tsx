@@ -9,9 +9,11 @@ interface ModalProps {
   onClose: () => void;
   children: ReactNode;
   wide?: boolean;
+  /** When false, the X button, Escape key, and backdrop click are disabled. */
+  dismissable?: boolean;
 }
 
-export function Modal({ open, title, subtitle, onClose, children, wide = false }: ModalProps) {
+export function Modal({ open, title, subtitle, onClose, children, wide = false, dismissable = true }: ModalProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
   // onClose is usually an inline closure that changes every render; keep it in
   // a ref so the effect below only runs when `open` changes. Otherwise every
@@ -23,16 +25,16 @@ export function Modal({ open, title, subtitle, onClose, children, wide = false }
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onCloseRef.current();
+      if (event.key === 'Escape' && dismissable) onCloseRef.current();
     };
     document.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
-    closeRef.current?.focus();
+    if (dismissable) closeRef.current?.focus();
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = '';
     };
-  }, [open]);
+  }, [open, dismissable]);
 
   return (
     <AnimatePresence>
@@ -43,7 +45,7 @@ export function Modal({ open, title, subtitle, onClose, children, wide = false }
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           role="presentation"
-          onClick={onClose}
+          onClick={dismissable ? onClose : undefined}
         >
           <div className="absolute inset-0 bg-ink-950/80 backdrop-blur-sm" aria-hidden="true" />
           <motion.div
@@ -62,6 +64,7 @@ export function Modal({ open, title, subtitle, onClose, children, wide = false }
                 <h3 className="text-lg font-semibold tracking-tight text-mist-100">{title}</h3>
                 {subtitle ? <p className="mt-1 text-sm text-mist-500">{subtitle}</p> : null}
               </div>
+              {dismissable ? (
               <button
                 ref={closeRef}
                 type="button"
@@ -71,6 +74,7 @@ export function Modal({ open, title, subtitle, onClose, children, wide = false }
               >
                 <X size={16} />
               </button>
+              ) : null}
             </div>
             <div className="thin-scroll max-h-[72vh] overflow-y-auto px-6 py-6">{children}</div>
           </motion.div>

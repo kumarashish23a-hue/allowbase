@@ -3,6 +3,7 @@ import {
   ClipboardCheck,
   FlaskConical,
   LayoutDashboard,
+  Loader2,
   Plug,
   Settings,
   ShieldCheck,
@@ -22,7 +23,9 @@ import { OrgSettingsPanel } from '../components/OrgSettingsPanel';
 import { ProviderConnections } from '../components/ProviderConnections';
 import { GatewayTest } from '../components/GatewayTest';
 import { Dashboard } from '../components/Dashboard';
-import { getActiveOrganizationId } from '../lib/supabase';
+import { SetupModal } from '../components/SetupModal';
+import { getActiveOrganizationId, getSupabase, isSupabaseConfigured } from '../lib/supabase';
+import { getSetupStatus, setupConnectComplete } from '../services/setupService';
 import { getActiveOrganization, getMyOrganizationRole } from '../services/organizationService';
 import { getAIRequests, type AIRequestRow } from '../services/aiRequestService';
 import { listApprovals, type ApprovalItem } from '../services/approvalService';
@@ -231,6 +234,54 @@ export function Console({ onSimulate }: ConsoleProps) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [orgId, setOrgId] = useState<string | null>(null);
   const [orgName, setOrgName] = useState<string | null>(null);
+  /**
+   * Setup gate: a signed-in user with an incomplete workspace connects
+   * everything first (blocking wizard), then sees the dashboard.
+   */
+  const [gate, setGate] = useState<'checking' | 'needs-setup' | 'ready'>('checking');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (!isSupabaseConfigured()) return 'ready';
+        const supabase = getSupabase();
+        const {
+          data: { session },
+        } = await supabase!.auth.getSession();
+        if (!session) return 'ready';
+        if (window.sessionStorage.getItem('dcp-setup-skipped') === '1') return 'ready';
+        const status = await getSetupStatus().catch(() => null);
+        return status && setupConnectComplete(status) ? 'ready' : 'needs-setup';
+      } catch {
+        return 'ready';
+      }
+    })().then((next) => {
+      if (!cancelled) setGate(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /** After the blocking wizard closes: re-check; a skip is remembered for this tab session. */
+  const handleWizardDone = async () => {
+    try {
+      const status = await getSetupStatus().catch(() => null);
+      if (status && setupConnectComplete(status)) {
+        setGate('ready');
+        return;
+      }
+    } catch {
+      /* fall through to skip */
+    }
+    try {
+      window.sessionStorage.setItem('dcp-setup-skipped', '1');
+    } catch {
+      /* private mode — the gate just re-checks next visit */
+    }
+    setGate('ready');
+  };
 
   useEffect(() => {
     (async () => {
@@ -259,6 +310,30 @@ export function Console({ onSimulate }: ConsoleProps) {
     setTab(next);
     window.scrollTo(0, 0);
   };
+
+  if (gate === 'checking') {
+    return (
+      <div className="mx-auto flex min-h-[60vh] max-w-7xl items-center justify-center px-4 pt-24 sm:px-6 lg:px-8">
+        <p className="flex items-center gap-2 text-sm text-mist-400">
+          <Loader2 size={16} className="animate-spin" /> Checking your workspace…
+        </p>
+      </div>
+    );
+  }
+
+  if (gate === 'needs-setup') {
+    return (
+      <div className="mx-auto min-h-[60vh] max-w-7xl px-4 pt-24 sm:px-6 lg:px-8">
+        <SetupModal
+          open
+          blocking
+          onClose={() => void handleWizardDone()}
+          onSignIn={() => setGate('ready')}
+          onTrySimulator={onSimulate}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-4 pt-24 sm:px-6 lg:px-8 lg:pt-28">

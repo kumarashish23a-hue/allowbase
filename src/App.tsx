@@ -1,11 +1,11 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Footer } from './sections/Footer';
 import { Home } from './pages/Home';
 import { Console } from './pages/Console';
 import { getActiveOrganization } from './services/organizationService';
-import { getSetupStatus } from './services/setupService';
+import { getSetupStatus, setupConnectComplete } from './services/setupService';
 import { initForceLogoutWatch } from './lib/forceLogout';
 import { ThemeProvider } from './theme';
 
@@ -35,11 +35,13 @@ function ScrollManager() {
   return null;
 }
 
-function App() {
+function Shell() {
+  const navigate = useNavigate();
   const [simulatorOpen, setSimulatorOpen] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
+  const [setupBlocking, setSetupBlocking] = useState(false);
 
   // Watch for a workspace admin remotely signing this user out.
   useEffect(() => initForceLogoutWatch(), []);
@@ -47,69 +49,84 @@ function App() {
   const openSimulator = () => setSimulatorOpen(true);
 
   /**
-   * After sign-in/sign-up: open the workspace setup checklist when anything
-   * is still incomplete (no org, no data, evaluator not deployed).
-   * Fully-set-up users land straight back on the page.
+   * After sign-in/sign-up the flow is: connect everything first, then the
+   * dashboard. Incomplete workspaces get the blocking setup wizard; finished
+   * ones land straight on the console dashboard.
    */
   const handleAuthSuccess = async () => {
     setSignInOpen(false);
     try {
-      // Fast path: no org yet -> setup modal will handle org creation.
+      // Fast path: no org yet -> setup wizard will handle org creation.
       const org = await getActiveOrganization().catch(() => null);
       if (!org) {
+        setSetupBlocking(true);
         setSetupOpen(true);
         return;
       }
       const status = await getSetupStatus().catch(() => null);
-      if (
-        status &&
-        (!status.hasData ||
-          status.migrations.state !== 'ok' ||
-          status.functions['evaluate-ai-request'] !== 'deployed' ||
-          status.functions['ingest-event'] !== 'deployed' ||
-          !status.hasApiKey ||
-          !status.hasRequests)
-      ) {
+      if (!status || !setupConnectComplete(status)) {
+        setSetupBlocking(true);
         setSetupOpen(true);
+        return;
       }
     } catch {
+      setSetupBlocking(true);
       setSetupOpen(true);
+      return;
     }
+    navigate('/app');
+  };
+
+  /** Closing the blocking wizard always lands on the dashboard. */
+  const handleSetupClose = () => {
+    const wasBlocking = setupBlocking;
+    setSetupOpen(false);
+    setSetupBlocking(false);
+    if (wasBlocking) navigate('/app');
   };
 
   return (
+    <>
+      <ScrollManager />
+      <div className="min-h-screen">
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-accent-500 focus:px-4 focus:py-2 focus:text-sm focus:text-accent-ink"
+        >
+          Skip to content
+        </a>
+        <Navbar onSignIn={() => setSignInOpen(true)} onProfile={() => setProfileOpen(true)} />
+        <main id="main">
+          <Routes>
+            <Route path="/" element={<Home onDemo={openSimulator} />} />
+            <Route path="/app" element={<Console onSimulate={openSimulator} />} />
+            <Route path="/admin" element={<Admin />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+        <Footer />
+        <Suspense fallback={null}>
+          <RequestSimulator open={simulatorOpen} onClose={() => setSimulatorOpen(false)} />
+          <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} onAuthSuccess={() => void handleAuthSuccess()} />
+          <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} onOpenSetup={() => setSetupOpen(true)} />
+          <SetupModal
+            open={setupOpen}
+            blocking={setupBlocking}
+            onClose={handleSetupClose}
+            onSignIn={() => setSignInOpen(true)}
+            onTrySimulator={openSimulator}
+          />
+        </Suspense>
+      </div>
+    </>
+  );
+}
+
+function App() {
+  return (
     <ThemeProvider>
       <BrowserRouter>
-        <ScrollManager />
-        <div className="min-h-screen">
-          <a
-            href="#main"
-            className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-accent-500 focus:px-4 focus:py-2 focus:text-sm focus:text-accent-ink"
-          >
-            Skip to content
-          </a>
-          <Navbar onSignIn={() => setSignInOpen(true)} onProfile={() => setProfileOpen(true)} />
-          <main id="main">
-            <Routes>
-              <Route path="/" element={<Home onDemo={openSimulator} />} />
-              <Route path="/app" element={<Console onSimulate={openSimulator} />} />
-              <Route path="/admin" element={<Admin />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </main>
-          <Footer />
-          <Suspense fallback={null}>
-            <RequestSimulator open={simulatorOpen} onClose={() => setSimulatorOpen(false)} />
-            <SignInModal open={signInOpen} onClose={() => setSignInOpen(false)} onAuthSuccess={() => void handleAuthSuccess()} />
-            <ProfileModal open={profileOpen} onClose={() => setProfileOpen(false)} onOpenSetup={() => setSetupOpen(true)} />
-            <SetupModal
-              open={setupOpen}
-              onClose={() => setSetupOpen(false)}
-              onSignIn={() => setSignInOpen(true)}
-              onTrySimulator={openSimulator}
-            />
-          </Suspense>
-        </div>
+        <Shell />
       </BrowserRouter>
     </ThemeProvider>
   );

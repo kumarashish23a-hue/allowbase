@@ -48,6 +48,11 @@ interface SetupModalProps {
   onClose: () => void;
   onSignIn: () => void;
   onTrySimulator: () => void;
+  /**
+   * Blocking mode: the dialog cannot be dismissed with X / Escape / backdrop.
+   * The only exits are finishing the steps or "Skip for now".
+   */
+  blocking?: boolean;
 }
 
 const inputClass =
@@ -92,7 +97,7 @@ function firstIncompleteOf(status: SetupStatus, modeConfirmed: boolean): number 
   return idx === -1 ? STEP_TITLES.length : idx;
 }
 
-export function SetupModal({ open, onClose, onSignIn, onTrySimulator }: SetupModalProps) {
+export function SetupModal({ open, onClose, onSignIn, onTrySimulator, blocking = false }: SetupModalProps) {
   const navigate = useNavigate();
   const [status, setStatus] = useState<SetupStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -803,7 +808,7 @@ export function SetupModal({ open, onClose, onSignIn, onTrySimulator }: SetupMod
       : 'Connect, configure, protect, monitor.';
 
   return (
-    <Modal open={open} onClose={onClose} title="Workspace setup" subtitle={subtitle}>
+    <Modal open={open} onClose={onClose} dismissable={!blocking} title="Workspace setup" subtitle={subtitle} wide>
       {loading || !status ? (
         <div className="flex items-center justify-center gap-2 py-10 text-sm text-mist-400">
           <Loader2 size={16} className="animate-spin" /> Checking your setup…
@@ -870,11 +875,11 @@ export function SetupModal({ open, onClose, onSignIn, onTrySimulator }: SetupMod
                 type="button"
                 onClick={() => {
                   onClose();
-                  onTrySimulator();
+                  if (!blocking) onTrySimulator();
                 }}
                 className={`${primaryBtn} mt-5 w-full !py-3 !text-base`}
               >
-                Try the simulator
+                {blocking ? 'Open dashboard' : 'Try the simulator'}
               </button>
             </div>
           ) : (
@@ -909,6 +914,17 @@ export function SetupModal({ open, onClose, onSignIn, onTrySimulator }: SetupMod
                   </button>
                 )}
               </div>
+              {blocking ? (
+                <div className="mt-4 text-center">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="text-sm text-mist-500 underline-offset-2 transition hover:text-mist-300 hover:underline"
+                  >
+                    Skip for now — go to dashboard
+                  </button>
+                </div>
+              ) : null}
             </div>
           )}
         </div>

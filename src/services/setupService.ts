@@ -36,6 +36,23 @@ export const EDGE_FUNCTION_NAME = 'evaluate-ai-request';
 export const INGEST_FUNCTION_NAME = 'ingest-event';
 export const PROVIDER_FUNCTION_NAME = 'ai-provider';
 export const GATEWAY_FUNCTION_NAME = 'ai-gateway';
+
+/**
+ * True when the user-facing "connect everything" steps are done: organization,
+ * AI provider, data source, apps/agents, and a security mode on the workspace.
+ * Used by the console gate and post-sign-in flow so a signed-in user connects
+ * everything before the dashboard. (The org always carries a mode from
+ * migration 015, so this is really the four connection steps.)
+ */
+export function setupConnectComplete(status: SetupStatus): boolean {
+  return (
+    status.hasOrg &&
+    status.models.length > 0 &&
+    status.hasDataSource &&
+    (status.hasAgent || status.hasApiKey) &&
+    status.enforcementMode !== null
+  );
+}
 const EDGE_FUNCTION_CODE_URL =
   'https://raw.githubusercontent.com/kumarashish23a-hue/dataplane/main/supabase/functions/evaluate-ai-request/index.ts';
 
