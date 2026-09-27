@@ -6,6 +6,7 @@ import type { Decision, Policy } from '../types';
 const effectMap: Record<string, Decision> = {
   allow: 'ALLOW',
   block: 'BLOCK',
+  mask: 'MASK',
   redact: 'REDACT',
   review: 'REDACT',
 };
@@ -56,6 +57,7 @@ export async function listPolicies(): Promise<Policy[]> {
 const actionMap: Record<Decision, string> = {
   ALLOW: 'allow',
   BLOCK: 'block',
+  MASK: 'mask',
   REDACT: 'redact',
 };
 

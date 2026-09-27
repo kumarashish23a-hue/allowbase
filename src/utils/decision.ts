@@ -20,6 +20,12 @@ export interface MockEvaluation {
   enforced?: boolean;
   /** The decision that would have applied in enforce mode (monitor mode only). */
   wouldDecision?: string | null;
+  /** True when a mask policy transformed the request. */
+  masked?: boolean;
+  /** Content with sensitive spans redacted (only when masked is true). */
+  transformedContent?: string | null;
+  /** Number of spans redacted. */
+  maskedCount?: number;
 }
 
 const externalModels = ['gpt', 'claude', 'gemini', 'llama'];

@@ -325,5 +325,120 @@ expect(
   'enforce mode blocks again'
 );
 
+// --- 016 mask action tests --------------------------------------------------
+// A mask policy transforms the request: decision allow, masked=true.
+await db.exec(`
+  insert into public.policies (organization_id, name, description, status, priority, rule, action)
+  values ('${ORG}', 'Mask PII test', 'test', 'active', 6,
+    '{"conditions":[{"field":"content.category","operator":"in","value":["email","phone"]}]}'::jsonb,
+    'mask')
+`);
+const maskedRes = await db.query(
+  `select public.evaluate_ai_request('${ORG}','${INTERNAL_AI}','Support reply',array['${DOCS}'::uuid],null,null,'chat',
+     '[{"detector":"regex-v1","category":"email","severity":"medium","confidence":0.95,"count":2}]'::jsonb) as r`
+);
+const mk = maskedRes.rows[0].r;
+expect(mk.decision === 'allow' && mk.masked === true, 'mask policy allows with masked=true');
+const mkReq = await db.query(`select metadata from public.ai_requests where id = '${mk.request_id}'::uuid`);
+expect(mkReq.rows[0].metadata.masked === true, 'request metadata records masked');
+const mkEval = await db.query(
+  `select decision from public.policy_evaluations where ai_request_id = '${mk.request_id}'::uuid
+   and policy_id = (select id from public.policies where name = 'Mask PII test' and organization_id = '${ORG}'::uuid)`
+);
+expect(mkEval.rows[0].decision === 'allow', 'mask evaluation recorded as allow');
+const mkRisk = await db.query(`select title from public.risk_events where ai_request_id = '${mk.request_id}'::uuid`);
+expect(mkRisk.rows.length === 1 && /masked/.test(mkRisk.rows[0].title), 'risk event raised for masking');
+
+// Monitor mode: nothing is transformed, would_mask is recorded instead.
+await db.exec(`update public.organizations set enforcement_mode = 'monitor' where id = '${ORG}'`);
+const monMaskRes = await db.query(
+  `select public.evaluate_ai_request('${ORG}','${INTERNAL_AI}','Support reply',array['${DOCS}'::uuid],null,null,'chat',
+     '[{"detector":"regex-v1","category":"email","severity":"medium","confidence":0.95,"count":2}]'::jsonb) as r`
+);
+const mm = monMaskRes.rows[0].r;
+expect(
+  mm.decision === 'allow' && mm.masked === false && mm.would_mask === true,
+  'monitor mode records would_mask without masking'
+);
+await db.exec(`update public.organizations set enforcement_mode = 'enforce' where id = '${ORG}'`);
+
+// Invalid policy actions are rejected by the check constraint.
+let maskRejected = false;
+try {
+  await db.exec(
+    `insert into public.policies (organization_id, name, status, priority, rule, action)
+     values ('${ORG}','Bad action','active',99,'{}'::jsonb,'shred')`
+  );
+} catch {
+  maskRejected = true;
+}
+expect(maskRejected, 'invalid policy action rejected');
+
+// --- 017 provider connections tests ----------------------------------------
+// Table exists, RLS enabled, and no direct policies for authenticated users.
+const connCols = await db.query(`
+  select column_name from information_schema.columns
+  where table_schema = 'public' and table_name = 'ai_provider_connections'
+`);
+const colNames = connCols.rows.map((r) => r.column_name);
+expect(
+  ['organization_id', 'provider', 'key_ciphertext', 'key_iv', 'key_hint', 'status'].every((c) =>
+    colNames.includes(c),
+  ),
+  'ai_provider_connections has expected columns',
+);
+const rlsState = await db.query(`
+  select relrowsecurity from pg_class where relname = 'ai_provider_connections'
+`);
+expect(rlsState.rows[0].relrowsecurity === true, 'provider connections table has RLS enabled');
+const connPolicies = await db.query(`
+  select count(*)::int as n from pg_policies where tablename = 'ai_provider_connections'
+`);
+expect(connPolicies.rows[0].n === 0, 'no direct RLS policies on provider connections');
+
+// Authenticated users cannot read or write the credential table directly.
+// (Supabase grants default table privileges to authenticated; PGlite does not,
+// so grant first to emulate the live environment — RLS must still deny all.)
+await db.exec(`grant select, insert, update, delete on public.ai_provider_connections to authenticated`);
+await db.exec(`set role authenticated`);
+let readDenied = false;
+try {
+  await db.query(`select * from public.ai_provider_connections limit 1`);
+} catch {
+  readDenied = true;
+}
+expect(!readDenied, 'authenticated select returns empty via RLS (no error, no rows)');
+let writeDenied = false;
+try {
+  await db.exec(
+    `insert into public.ai_provider_connections (organization_id, provider, key_ciphertext, key_iv)
+     values ('${ORG}', 'openai', 'x', 'y')`,
+  );
+} catch {
+  writeDenied = true;
+}
+await db.exec(`reset role`);
+expect(writeDenied, 'authenticated insert into provider connections denied');
+
+// Service role can upsert; one connection per org/provider.
+await db.exec(
+  `insert into public.ai_provider_connections (organization_id, provider, label, key_ciphertext, key_iv, key_hint, status)
+   values ('${ORG}', 'openai', 'OpenAI', 'ct', 'iv', '••••1234', 'active')`,
+);
+await db.exec(
+  `insert into public.ai_provider_connections (organization_id, provider, label, key_ciphertext, key_iv, key_hint, status)
+   values ('${ORG}', 'openai', 'OpenAI', 'ct2', 'iv2', '••••5678', 'active')
+   on conflict (organization_id, provider) do update
+   set key_ciphertext = excluded.key_ciphertext, key_iv = excluded.key_iv,
+       key_hint = excluded.key_hint, updated_at = now()`,
+);
+const connRows = await db.query(
+  `select key_hint, key_ciphertext from public.ai_provider_connections where organization_id = '${ORG}' and provider = 'openai'`,
+);
+expect(
+  connRows.rows.length === 1 && connRows.rows[0].key_hint === '••••5678',
+  'upsert keeps one connection per org/provider',
+);
+
 await db.close();
 console.log('SQL verification passed.');

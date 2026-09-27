@@ -39,7 +39,7 @@ function toMockEvaluation(result: EvaluationResult): MockEvaluation {
     return `${label} (${finding.severity})${count}`;
   });
   return {
-    decision: decisionMap[result.decision],
+    decision: result.masked ? 'MASK' : decisionMap[result.decision],
     reason: result.reasons.join(' ') || 'Evaluated by the Data Control Plane policy engine.',
     detected,
     policy: result.policies_triggered[0] ?? 'Default policy',
@@ -47,6 +47,9 @@ function toMockEvaluation(result: EvaluationResult): MockEvaluation {
     approvalRequestId: result.approval_request_id ?? null,
     enforced: result.enforced ?? true,
     wouldDecision: result.would_decision ?? null,
+    masked: result.masked ?? false,
+    transformedContent: result.transformed_content ?? null,
+    maskedCount: result.masked_count ?? 0,
   };
 }
 

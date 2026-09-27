@@ -177,4 +177,12 @@ export interface EvaluationResult {
   /** The decision that would have applied in enforce mode (monitor mode only). */
   would_decision?: 'allow' | 'block' | 'review' | null;
   enforcement_mode?: 'monitor' | 'enforce';
+  /** True when a mask policy transformed the request (decision is allow). */
+  masked?: boolean;
+  /** True in monitor mode when masking would have applied. */
+  would_mask?: boolean;
+  /** Content with sensitive spans redacted (only when masked is true). */
+  transformed_content?: string;
+  /** Number of spans redacted. */
+  masked_count?: number;
 }

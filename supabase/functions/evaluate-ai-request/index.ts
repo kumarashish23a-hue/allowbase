@@ -12,7 +12,7 @@
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
-import { detectSensitiveContent } from '../_shared/detect.ts';
+import { detectSensitiveContent, maskSensitiveContent } from '../_shared/detect.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -163,7 +163,15 @@ serve(async (req: Request): Promise<Response> => {
   }
 
   // 4. Structured response — same shape as the frontend simulator expects.
-  return new Response(JSON.stringify(data), {
+  // When the database says the request was masked, redact the detected
+  // sensitive spans here (in-memory only; the raw content is never stored).
+  const result = (data ?? {}) as Record<string, unknown>;
+  if (result.masked === true && typeof body.content === 'string' && body.content.length > 0) {
+    const { masked, maskedCount } = maskSensitiveContent(body.content);
+    result.transformed_content = masked;
+    result.masked_count = maskedCount;
+  }
+  return new Response(JSON.stringify(result), {
     status: 200,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });

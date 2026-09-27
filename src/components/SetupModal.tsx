@@ -21,6 +21,7 @@ import {
   Terminal,
 } from 'lucide-react';
 import { Modal } from './Modal';
+import { ProviderConnections } from './ProviderConnections';
 import { getActiveOrganizationId } from '../lib/supabase';
 import {
   createOrganization,
@@ -30,7 +31,9 @@ import {
 } from '../services/organizationService';
 import {
   EDGE_FUNCTION_NAME,
+  GATEWAY_FUNCTION_NAME,
   INGEST_FUNCTION_NAME,
+  PROVIDER_FUNCTION_NAME,
   getFunctionsDashboardUrl,
   getSetupStatus,
   getSqlEditorUrl,
@@ -60,13 +63,6 @@ const STEP_TITLES = [
   'Connect data',
   'Connect apps & agents',
   'Security mode',
-];
-
-const AI_PROVIDERS = [
-  { name: 'OpenAI', note: 'GPT models' },
-  { name: 'Anthropic', note: 'Claude models' },
-  { name: 'Google Gemini', note: 'Gemini models' },
-  { name: 'Custom', note: 'Any OpenAI-compatible API' },
 ];
 
 const DATA_CONNECTORS: { name: string; desc: string; status: 'implemented' | 'soon' }[] = [
@@ -204,13 +200,17 @@ export function SetupModal({ open, onClose, onSignIn, onTrySimulator }: SetupMod
     setProbing(true);
     setError(null);
     try {
-      const [evaluate, ingest] = await Promise.all([
+      const [evaluate, ingest, provider, gateway] = await Promise.all([
         probeEdgeFunction(EDGE_FUNCTION_NAME),
         probeEdgeFunction(INGEST_FUNCTION_NAME),
+        probeEdgeFunction(PROVIDER_FUNCTION_NAME),
+        probeEdgeFunction(GATEWAY_FUNCTION_NAME),
       ]);
       const functions = {
         'evaluate-ai-request': evaluate,
         'ingest-event': ingest,
+        'ai-provider': provider,
+        'ai-gateway': gateway,
       } as SetupStatus['functions'];
       setStatus((prev) => (prev ? { ...prev, functions } : prev));
     } catch {
@@ -341,6 +341,62 @@ export function SetupModal({ open, onClose, onSignIn, onTrySimulator }: SetupMod
     );
   };
 
+  const renderFunctionRow = (fn: keyof SetupStatus['functions'], extraCommand?: string) => {
+    if (!status) return null;
+    const deployed = status.functions[fn] === 'deployed';
+    const command = `npx supabase functions deploy ${fn}`;
+    return (
+      <li key={fn} className="rounded-xl border border-line bg-ink-950/70 px-3 py-2">
+        <div className="flex items-center gap-2">
+          {deployed ? (
+            <CheckCircle2 size={14} className="shrink-0 text-mint-400" />
+          ) : (
+            <Circle size={14} className="shrink-0 text-mist-600" />
+          )}
+          <span className="font-mono text-xs text-mist-200">{fn}</span>
+          <span className="text-xs text-mist-500">
+            {functionStatusLabel(status.functions[fn])}
+          </span>
+        </div>
+        {!deployed && (
+          <>
+            <button
+              type="button"
+              onClick={() => void handleCopyCommand(command)}
+              className="mt-2 flex w-full items-center justify-between gap-2 rounded-lg bg-ink-900 px-3 py-2 font-mono text-xs text-mist-300 transition hover:text-mist-100"
+            >
+              <span className="truncate">{command}</span>
+              {copiedCmd === command ? (
+                <Check size={14} className="shrink-0 text-mint-400" />
+              ) : (
+                <Copy size={14} className="shrink-0" />
+              )}
+            </button>
+            {extraCommand ? (
+              <button
+                type="button"
+                onClick={() => void handleCopyCommand(extraCommand)}
+                className="mt-2 flex w-full items-center justify-between gap-2 rounded-lg bg-ink-900 px-3 py-2 font-mono text-xs text-mist-300 transition hover:text-mist-100"
+              >
+                <span className="truncate">{extraCommand}</span>
+                {copiedCmd === extraCommand ? (
+                  <Check size={14} className="shrink-0 text-mint-400" />
+                ) : (
+                  <Copy size={14} className="shrink-0" />
+                )}
+              </button>
+            ) : null}
+          </>
+        )}
+      </li>
+    );
+  };
+
+  const gatewayLive =
+    !!status &&
+    status.functions[PROVIDER_FUNCTION_NAME] === 'deployed' &&
+    status.functions[GATEWAY_FUNCTION_NAME] === 'deployed';
+
   const renderServicesFix = () => {
     if (!status) return null;
     if (bothFunctionsLive) {
@@ -358,40 +414,26 @@ export function SetupModal({ open, onClose, onSignIn, onTrySimulator }: SetupMod
           <span className="font-mono text-mist-200">dataplane</span> project folder, run:
         </p>
         <ul className="mt-2 space-y-2">
-          {([EDGE_FUNCTION_NAME, INGEST_FUNCTION_NAME] as const).map((fn) => {
-            const deployed = status.functions[fn] === 'deployed';
-            const command = `npx supabase functions deploy ${fn}`;
-            return (
-              <li key={fn} className="rounded-xl border border-line bg-ink-950/70 px-3 py-2">
-                <div className="flex items-center gap-2">
-                  {deployed ? (
-                    <CheckCircle2 size={14} className="shrink-0 text-mint-400" />
-                  ) : (
-                    <Circle size={14} className="shrink-0 text-mist-600" />
-                  )}
-                  <span className="font-mono text-xs text-mist-200">{fn}</span>
-                  <span className="text-xs text-mist-500">
-                    {functionStatusLabel(status.functions[fn])}
-                  </span>
-                </div>
-                {!deployed && (
-                  <button
-                    type="button"
-                    onClick={() => void handleCopyCommand(command)}
-                    className="mt-2 flex w-full items-center justify-between gap-2 rounded-lg bg-ink-900 px-3 py-2 font-mono text-xs text-mist-300 transition hover:text-mist-100"
-                  >
-                    <span className="truncate">{command}</span>
-                    {copiedCmd === command ? (
-                      <Check size={14} className="shrink-0 text-mint-400" />
-                    ) : (
-                      <Copy size={14} className="shrink-0" />
-                    )}
-                  </button>
-                )}
-              </li>
-            );
-          })}
+          {renderFunctionRow(EDGE_FUNCTION_NAME)}
+          {renderFunctionRow(INGEST_FUNCTION_NAME)}
         </ul>
+        <h4 className="mt-4 text-sm font-semibold text-mist-200">
+          AI gateway <span className="font-normal text-mist-500">(optional)</span>
+        </h4>
+        <p className="mt-1 text-xs text-mist-500">
+          Needed only to connect provider keys and forward live AI calls. The gateway encrypts
+          keys with a server secret:
+        </p>
+        <ul className="mt-2 space-y-2">
+          {renderFunctionRow(PROVIDER_FUNCTION_NAME)}
+          {renderFunctionRow(
+            GATEWAY_FUNCTION_NAME,
+            'supabase secrets set PROVIDER_ENCRYPTION_KEY=$(openssl rand -hex 32)',
+          )}
+        </ul>
+        {gatewayLive ? (
+          <p className="mt-2 text-xs text-mint-400">AI gateway services are live.</p>
+        ) : null}
         <button
           type="button"
           onClick={() => void handleProbeFunctions()}
@@ -551,28 +593,12 @@ export function SetupModal({ open, onClose, onSignIn, onTrySimulator }: SetupMod
         return (
           <>
             <p className="mt-2 text-[15px] leading-relaxed text-mist-400">
-              Which AI providers may your workspace use? Provider API keys are stored server-side
-              only — that part arrives in the next update. For now, register the AI destinations
-              your policies target.
+              Connect the AI providers your workspace may use. Keys are encrypted server-side
+              and never shown again — the AI gateway evaluates every request against your
+              policies before the provider is called.
             </p>
-            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {AI_PROVIDERS.map((provider) => (
-                <div
-                  key={provider.name}
-                  className="flex items-center justify-between gap-2 rounded-xl border border-line bg-ink-950/60 px-3 py-2.5"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-mist-200">{provider.name}</p>
-                    <p className="text-xs text-mist-500">{provider.note}</p>
-                  </div>
-                  <span
-                    className="shrink-0 rounded-full border border-line bg-ink-900 px-2 py-0.5 text-[11px] font-medium text-mist-500"
-                    title="Provider key storage arrives in the next update"
-                  >
-                    Not configured
-                  </span>
-                </div>
-              ))}
+            <div className="mt-4">
+              <ProviderConnections />
             </div>
             <h4 className="mt-5 text-sm font-semibold text-mist-200">Registered AI models</h4>
             {status.models.length > 0 ? (

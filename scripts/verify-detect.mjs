@@ -93,6 +93,22 @@ expect(D.hasCriticalFinding(D.detectSensitiveContent('AKIAIOSFODNN7EXAMPLE')), '
 expect(!D.hasCriticalFinding(D.detectSensitiveContent('jane@example.com')), 'hasCriticalFinding false for email only');
 expect(D.findingCategories(D.detectSensitiveContent('a@b.com 415-555-0132')).sort().join(',') === 'email,phone', 'findingCategories distinct');
 
+// ---------------------------------------------------------------- A2. masking
+let m = D.maskSensitiveContent('Contact jane.doe@example.com or call 415-555-0132.');
+expect(m.maskedCount === 2, 'mask replaces two spans');
+expect(m.masked === 'Contact [redacted:email] or call [redacted:phone].', 'mask output replaces spans with category tags');
+expect(!m.masked.includes('jane.doe@example.com') && !m.masked.includes('415-555-0132'), 'masked output contains no raw values');
+expect(m.categories.sort().join(',') === 'email,phone', 'mask reports categories');
+
+m = D.maskSensitiveContent('Hello world, a normal ticket.');
+expect(m.maskedCount === 0 && m.masked === 'Hello world, a normal ticket.', 'clean text unchanged');
+
+m = D.maskSensitiveContent('');
+expect(m.maskedCount === 0 && m.masked === '', 'empty input -> empty output');
+
+m = D.maskSensitiveContent('reach jane.doe@example.com about card 4111 1111 1111 1111 today');
+expect(m.maskedCount === 2 && !m.masked.includes('jane.doe') && !m.masked.includes('4111'), 'adjacent spans masked without leaking');
+
 // ---------------------------------------------------------------- B. SQL path
 const migDir = new URL('../supabase/migrations/', import.meta.url).pathname;
 const files = readdirSync(migDir).filter((f2) => f2.endsWith('.sql')).sort();

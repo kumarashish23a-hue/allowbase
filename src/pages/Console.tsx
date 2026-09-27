@@ -3,7 +3,6 @@ import {
   ClipboardCheck,
   FlaskConical,
   LayoutDashboard,
-  Loader2,
   Plug,
   Settings,
   ShieldCheck,
@@ -20,10 +19,13 @@ import { Requests } from '../sections/Requests';
 import { PolicyEngine } from '../sections/PolicyEngine';
 import { MembersPanel } from '../components/MembersPanel';
 import { OrgSettingsPanel } from '../components/OrgSettingsPanel';
+import { ProviderConnections } from '../components/ProviderConnections';
+import { GatewayTest } from '../components/GatewayTest';
+import { Dashboard } from '../components/Dashboard';
 import { getActiveOrganizationId } from '../lib/supabase';
 import { getActiveOrganization, getMyOrganizationRole } from '../services/organizationService';
-import { getDashboard, type DashboardData } from '../services/dashboardService';
-import type { Metric } from '../types';
+import { getAIRequests, type AIRequestRow } from '../services/aiRequestService';
+import { listApprovals, type ApprovalItem } from '../services/approvalService';
 
 interface ConsoleProps {
   onSimulate: () => void;
@@ -59,26 +61,32 @@ function tabForHash(hash: string): TabId | null {
   }
 }
 
-const toneCls: Record<Metric['tone'], string> = {
-  good: 'text-mint-300',
-  bad: 'text-rose-300',
-  warn: 'text-amber-300',
-  neutral: 'text-mist-200',
+const riskCls: Record<string, string> = {
+  critical: 'border-rose-400/30 bg-rose-400/10 text-rose-300',
+  high: 'border-rose-400/30 bg-rose-400/10 text-rose-300',
+  medium: 'border-amber-400/30 bg-amber-400/10 text-amber-300',
+  low: 'border-mint-400/30 bg-mint-400/10 text-mint-300',
+};
+
+const statusCls: Record<string, string> = {
+  blocked: 'border-rose-400/30 bg-rose-400/10 text-rose-300',
+  allowed: 'border-mint-400/30 bg-mint-400/10 text-mint-300',
+  in_review: 'border-amber-400/30 bg-amber-400/10 text-amber-300',
 };
 
 function DashboardTab({ onSimulate, goToTab }: { onSimulate: () => void; goToTab: (t: TabId) => void }) {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [events, setEvents] = useState<AIRequestRow[]>([]);
+  const [pendingApprovals, setPendingApprovals] = useState<ApprovalItem[]>([]);
 
   useEffect(() => {
     let cancelled = false;
-    getDashboard('24h')
-      .then((d) => {
-        if (!cancelled) setData(d);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load metrics.');
-      });
+    Promise.all([getAIRequests(5).catch(() => []), listApprovals().catch(() => [])]).then(
+      ([reqs, approvals]) => {
+        if (cancelled) return;
+        setEvents(reqs);
+        setPendingApprovals(approvals.filter((a) => a.status === 'pending'));
+      },
+    );
     return () => {
       cancelled = true;
     };
@@ -86,45 +94,7 @@ function DashboardTab({ onSimulate, goToTab }: { onSimulate: () => void; goToTab
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold text-mist-100">Security overview</h2>
-        {data ? (
-          <span
-            className={`rounded-full border px-3 py-1 text-xs font-medium ${
-              data.live
-                ? 'border-mint-400/30 bg-mint-400/10 text-mint-300'
-                : 'border-line bg-ink-900 text-mist-500'
-            }`}
-          >
-            {data.live ? 'Live data' : 'Demo data'}
-          </span>
-        ) : null}
-      </div>
-
-      {error ? (
-        <p className="rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-300">
-          {error}
-        </p>
-      ) : !data ? (
-        <p className="flex items-center gap-2 text-sm text-mist-500">
-          <Loader2 size={14} className="animate-spin" /> Loading metrics…
-        </p>
-      ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-          {data.metrics.map((metric) => (
-            <div
-              key={metric.label}
-              className="rounded-xl border border-line bg-ink-950/60 px-4 py-3"
-            >
-              <p className={`text-2xl font-bold ${toneCls[metric.tone]}`}>{metric.value}</p>
-              <p className="mt-1 text-xs font-medium text-mist-400">{metric.label}</p>
-              <p className="text-[11px] text-mist-600">{metric.delta}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div className="mt-6 grid gap-3 sm:grid-cols-3">
+      <div className="mb-6 grid gap-3 sm:grid-cols-3">
         <button
           type="button"
           onClick={onSimulate}
@@ -154,10 +124,97 @@ function DashboardTab({ onSimulate, goToTab }: { onSimulate: () => void; goToTab
         >
           <ClipboardCheck size={18} className="shrink-0 text-accent-400" />
           <span>
-            <span className="block text-sm font-semibold text-mist-100">Review approvals</span>
+            <span className="block text-sm font-semibold text-mist-100">
+              Review approvals
+              {pendingApprovals.length > 0 ? ` (${pendingApprovals.length})` : ''}
+            </span>
             <span className="block text-xs text-mist-500">Requests waiting on a human.</span>
           </span>
         </button>
+      </div>
+
+      <Dashboard />
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <div className="rounded-xl border border-line bg-ink-950/60 p-5">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-mist-100">Recent security events</h3>
+            <button
+              type="button"
+              onClick={() => goToTab('events')}
+              className="text-xs font-medium text-accent-400 underline-offset-2 hover:underline"
+            >
+              View all
+            </button>
+          </div>
+          <div className="mt-4 space-y-2">
+            {events.length === 0 ? (
+              <p className="text-sm text-mist-500">No requests yet — run the simulator.</p>
+            ) : (
+              events.map((event) => (
+                <div
+                  key={event.id}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-line bg-ink-900/60 px-3 py-2.5"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-mist-200">{event.purpose}</p>
+                    <p className="text-[11px] text-mist-600">
+                      {new Date(event.created_at).toLocaleString()}
+                      {event.model ? ` · ${event.model}` : ''}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <span
+                      className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${riskCls[event.risk] ?? 'border-line text-mist-500'}`}
+                    >
+                      {event.risk}
+                    </span>
+                    <span
+                      className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusCls[event.status] ?? 'border-line text-mist-500'}`}
+                    >
+                      {event.status.replace('_', ' ')}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-line bg-ink-950/60 p-5">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-mist-100">Pending approvals</h3>
+            <button
+              type="button"
+              onClick={() => goToTab('approvals')}
+              className="text-xs font-medium text-accent-400 underline-offset-2 hover:underline"
+            >
+              Review
+            </button>
+          </div>
+          <div className="mt-4 space-y-2">
+            {pendingApprovals.length === 0 ? (
+              <p className="text-sm text-mist-500">Nothing waiting — the queue is clear.</p>
+            ) : (
+              pendingApprovals.slice(0, 5).map((approval) => (
+                <div
+                  key={approval.id}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-amber-400/25 bg-amber-400/5 px-3 py-2.5"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-mist-200">{approval.request.purpose}</p>
+                    <p className="text-[11px] text-mist-600">
+                      {new Date(approval.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[11px] font-medium text-amber-300">
+                    pending
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="mt-8">
@@ -257,6 +314,8 @@ export function Console({ onSimulate }: ConsoleProps) {
           {tab === 'dashboard' && <DashboardTab onSimulate={onSimulate} goToTab={goToTab} />}
           {tab === 'connections' && (
             <div className="space-y-2">
+              <ProviderConnections />
+              <GatewayTest />
               <DataSources />
               <Agents />
               <ApiKeys />

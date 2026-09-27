@@ -25,7 +25,7 @@ export interface SetupStatus {
   hasDataSource: boolean;
   /** True when at least one agent is registered. */
   hasAgent: boolean;
-  functions: Record<'evaluate-ai-request' | 'ingest-event', EdgeFunctionStatus>;
+  functions: Record<'evaluate-ai-request' | 'ingest-event' | 'ai-provider' | 'ai-gateway', EdgeFunctionStatus>;
   /** True when at least one non-revoked API key exists. */
   hasApiKey: boolean;
   /** True when at least one AI request has been recorded. */
@@ -34,6 +34,8 @@ export interface SetupStatus {
 
 export const EDGE_FUNCTION_NAME = 'evaluate-ai-request';
 export const INGEST_FUNCTION_NAME = 'ingest-event';
+export const PROVIDER_FUNCTION_NAME = 'ai-provider';
+export const GATEWAY_FUNCTION_NAME = 'ai-gateway';
 const EDGE_FUNCTION_CODE_URL =
   'https://raw.githubusercontent.com/kumarashish23a-hue/dataplane/main/supabase/functions/evaluate-ai-request/index.ts';
 
@@ -46,6 +48,7 @@ const MIGRATION_TABLES: { table: string; column?: string; file: string }[] = [
   { table: 'ai_requests', column: 'detection_findings', file: '012_content_detection.sql' },
   { table: 'organization_members', column: 'force_logout_at', file: '014_force_logout.sql' },
   { table: 'organizations', column: 'enforcement_mode', file: '015_enforcement_mode.sql' },
+  { table: 'ai_provider_connections', file: '017_provider_connections.sql' },
 ];
 
 /** Check which migrations are missing by probing for their tables. Never throws. */
@@ -83,7 +86,7 @@ export async function getSetupStatus(): Promise<SetupStatus> {
     models: [],
     hasDataSource: false,
     hasAgent: false,
-    functions: { 'evaluate-ai-request': 'unknown', 'ingest-event': 'unknown' },
+    functions: { 'evaluate-ai-request': 'unknown', 'ingest-event': 'unknown', 'ai-provider': 'unknown', 'ai-gateway': 'unknown' },
     hasApiKey: false,
     hasRequests: false,
   };
@@ -104,7 +107,7 @@ export async function getSetupStatus(): Promise<SetupStatus> {
   if (!first) return { ...fallback, signedIn: true };
 
   const orgId = first.organization_id;
-  const [models, assets, policies, keys, requests, migrations, evaluateFn, ingestFn, orgRow, modelRows, sourceCount, agentCount] = await Promise.all([
+  const [models, assets, policies, keys, requests, migrations, evaluateFn, ingestFn, providerFn, gatewayFn, orgRow, modelRows, sourceCount, agentCount] = await Promise.all([
     supabase.from('ai_models').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
     supabase.from('data_assets').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
     supabase.from('policies').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
@@ -117,6 +120,8 @@ export async function getSetupStatus(): Promise<SetupStatus> {
     checkMigrations(supabase),
     probeEdgeFunction(EDGE_FUNCTION_NAME),
     probeEdgeFunction(INGEST_FUNCTION_NAME),
+    probeEdgeFunction(PROVIDER_FUNCTION_NAME),
+    probeEdgeFunction(GATEWAY_FUNCTION_NAME),
     supabase.from('organizations').select('settings,enforcement_mode').eq('id', orgId).maybeSingle(),
     supabase.from('ai_models').select('name,provider').eq('organization_id', orgId).limit(10),
     supabase.from('data_sources').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
@@ -139,7 +144,7 @@ export async function getSetupStatus(): Promise<SetupStatus> {
     models: (modelRows.data ?? []).map((m) => ({ name: m.name, provider: m.provider })),
     hasDataSource: (sourceCount.count ?? 0) > 0,
     hasAgent: (agentCount.count ?? 0) > 0,
-    functions: { 'evaluate-ai-request': evaluateFn, 'ingest-event': ingestFn },
+    functions: { 'evaluate-ai-request': evaluateFn, 'ingest-event': ingestFn, 'ai-provider': providerFn, 'ai-gateway': gatewayFn },
     hasApiKey: (keys.count ?? 0) > 0,
     hasRequests: (requests.count ?? 0) > 0,
   };
@@ -349,6 +354,28 @@ export async function loadStarterData(): Promise<StarterDataSummary> {
     ]).select('id');
     if (error) throw new Error('Could not create starter policies.');
     summary.policies = data?.length ?? 0;
+    // The mask policy needs migration 016. On older databases the insert is
+    // skipped instead of failing the whole starter load.
+    try {
+      const { data: maskData, error: maskError } = await supabase.from('policies').insert([
+        {
+          organization_id: orgId,
+          name: 'Mask PII in AI Content',
+          description: 'Emails, phone numbers, credit cards, and IDs detected in request content are redacted before forwarding.',
+          status: 'active',
+          priority: 7,
+          rule: {
+            conditions: [
+              { field: 'content.category', operator: 'in', value: ['email', 'phone', 'credit_card', 'gov_id'] },
+            ],
+          },
+          action: 'mask',
+        },
+      ]).select('id');
+      if (!maskError) summary.policies += maskData?.length ?? 0;
+    } catch {
+      // Migration 016 not applied yet — the workspace still loads.
+    }
   }
 
   const { count: findingCount } = await supabase

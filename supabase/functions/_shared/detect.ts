@@ -208,3 +208,68 @@ export function hasCriticalFinding(findings: ContentFinding[]): boolean {
 export function findingCategories(findings: ContentFinding[]): DetectionCategory[] {
   return [...new Set(findings.map((f) => f.category))];
 }
+
+export interface MaskResult {
+  /** The content with every detected sensitive span replaced. */
+  masked: string;
+  /** Number of spans replaced. */
+  maskedCount: number;
+  /** Categories that were masked. */
+  categories: DetectionCategory[];
+}
+
+interface MaskSpan {
+  start: number;
+  end: number;
+  category: DetectionCategory;
+}
+
+/**
+ * Replace every detected sensitive span with `[redacted:category]`.
+ * Raw matched values never leave this function — callers only see the
+ * transformed string plus aggregate counts, so masked output is safe to
+ * return in API responses and display in the UI.
+ */
+export function maskSensitiveContent(content: string): MaskResult {
+  if (typeof content !== 'string' || content.length === 0) {
+    return { masked: content, maskedCount: 0, categories: [] };
+  }
+  const spans: MaskSpan[] = [];
+  for (const rule of RULES) {
+    rule.pattern.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    // Same bound as detection so adversarial input can't spin forever.
+    let steps = 0;
+    while ((match = rule.pattern.exec(content)) !== null && steps < 10000) {
+      steps++;
+      if (match[0].length === 0) {
+        rule.pattern.lastIndex++;
+        continue;
+      }
+      if (!rule.validate || rule.validate(match[0], match.index, content)) {
+        spans.push({ start: match.index, end: match.index + match[0].length, category: rule.category });
+      }
+    }
+  }
+  // Prefer earlier, longer spans; drop anything overlapping an accepted span.
+  spans.sort((a, b) => a.start - b.start || b.end - a.end);
+  const accepted: MaskSpan[] = [];
+  for (const span of spans) {
+    if (accepted.some((s) => span.start < s.end && s.start < span.end)) continue;
+    accepted.push(span);
+  }
+  accepted.sort((a, b) => a.start - b.start);
+  let masked = '';
+  let cursor = 0;
+  for (const span of accepted) {
+    masked += content.slice(cursor, span.start);
+    masked += `[redacted:${span.category}]`;
+    cursor = span.end;
+  }
+  masked += content.slice(cursor);
+  return {
+    masked,
+    maskedCount: accepted.length,
+    categories: [...new Set(accepted.map((s) => s.category))],
+  };
+}

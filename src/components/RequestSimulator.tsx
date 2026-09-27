@@ -91,9 +91,11 @@ export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
     ? 'border-accent-400/30 bg-accent-400/10 text-accent-600'
     : result?.decision === 'BLOCK'
       ? 'border-rose-400/30 bg-rose-400/10 text-rose-400'
-      : result?.decision === 'REDACT'
-        ? 'border-amber-400/30 bg-amber-400/10 text-amber-400'
-        : 'border-mint-400/30 bg-mint-400/10 text-mint-400';
+      : result?.decision === 'MASK'
+        ? 'border-sky-400/30 bg-sky-400/10 text-sky-400'
+        : result?.decision === 'REDACT'
+          ? 'border-amber-400/30 bg-amber-400/10 text-amber-400'
+          : 'border-mint-400/30 bg-mint-400/10 text-mint-400';
 
   return (
     <Modal
@@ -224,9 +226,19 @@ export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
             <div className="mt-6 rounded-xl border border-line bg-ink-900/70 p-4">
               <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold tracking-[0.14em] ${decisionTone}`}>
                 {result.decision === 'BLOCK' ? <ShieldAlert size={14} /> : <ShieldCheck size={14} />}
-                {pendingApproval ? 'PENDING APPROVAL' : result.decision === 'BLOCK' ? 'BLOCKED' : result.decision === 'REDACT' ? 'REDACTED' : 'ALLOWED'}
+                {pendingApproval ? 'PENDING APPROVAL' : result.decision === 'BLOCK' ? 'BLOCKED' : result.decision === 'MASK' ? 'MASKED' : result.decision === 'REDACT' ? 'REDACTED' : 'ALLOWED'}
               </span>
               <p className="mt-3 text-sm text-mist-200">{result.reason}</p>
+              {result.masked && result.transformedContent ? (
+                <div className="mt-3 rounded-lg border border-sky-400/30 bg-sky-400/5 px-3 py-2">
+                  <p className="text-xs font-semibold text-sky-400">
+                    Masked content{result.maskedCount ? ` (${result.maskedCount} redaction${result.maskedCount === 1 ? '' : 's'})` : ''} — safe to forward:
+                  </p>
+                  <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words text-xs text-mist-200">
+                    {result.transformedContent}
+                  </pre>
+                </div>
+              ) : null}
               {result.enforced === false ? (
                 <p className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/5 px-3 py-2 text-xs text-amber-600">
                   Monitor mode: allowed, but would have{' '}

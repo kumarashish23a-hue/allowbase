@@ -11,6 +11,7 @@ import type { Policy } from '../types';
 const effectTone: Record<Policy['effect'], string> = {
   ALLOW: 'border-mint-400/30 bg-mint-400/10 text-mint-400',
   BLOCK: 'border-rose-400/30 bg-rose-400/10 text-rose-400',
+  MASK: 'border-sky-400/30 bg-sky-400/10 text-sky-400',
   REDACT: 'border-amber-400/30 bg-amber-400/10 text-amber-400',
 };
 

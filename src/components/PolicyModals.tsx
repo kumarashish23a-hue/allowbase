@@ -89,7 +89,7 @@ export function CreatePolicyModal({ open, onClose, onCreate }: CreatePolicyModal
   const [name, setName] = useState('New AI data policy');
   const [dataType, setDataType] = useState('PII');
   const [destination, setDestination] = useState('External AI');
-  const [effect, setEffect] = useState<'ALLOW' | 'BLOCK' | 'REDACT'>('BLOCK');
+  const [effect, setEffect] = useState<'ALLOW' | 'BLOCK' | 'MASK' | 'REDACT'>('BLOCK');
 
   const save = () => {
     onCreate({
@@ -155,8 +155,8 @@ export function CreatePolicyModal({ open, onClose, onCreate }: CreatePolicyModal
         </div>
         <div>
           <span className="text-xs font-semibold uppercase tracking-[0.16em] text-mist-500">Then</span>
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            {(['ALLOW', 'BLOCK', 'REDACT'] as const).map((option) => (
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {(['ALLOW', 'BLOCK', 'MASK', 'REDACT'] as const).map((option) => (
               <button
                 key={option}
                 type="button"

@@ -1,4 +1,4 @@
-export type Decision = 'ALLOW' | 'BLOCK' | 'REDACT';
+export type Decision = 'ALLOW' | 'BLOCK' | 'MASK' | 'REDACT';
 export type RiskLevel = 'Low' | 'Medium' | 'High';
 
 export interface NavItem {
