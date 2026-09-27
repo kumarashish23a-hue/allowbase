@@ -78,6 +78,8 @@ export function Dashboard() {
   const riskDistribution = data?.risk ?? [];
   const modelUsage = data?.modelUsage ?? [];
   const sourceUsage = data?.sourceUsage ?? [];
+  const riskyAgents = data?.riskyAgents ?? [];
+  const detectionCategories = data?.detectionCategories ?? [];
   const live = data?.live ?? false;
 
   if (error) {
@@ -231,6 +233,54 @@ export function Dashboard() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
+          </div>
+
+          <div className="rounded-xl border border-line bg-ink-950/60 p-5 lg:col-span-2">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-semibold text-mist-200">Riskiest agents</h4>
+              <span className="text-xs text-mist-600">blocked requests · {range}</span>
+            </div>
+            {riskyAgents.length === 0 ? (
+              <p className="mt-4 rounded-lg border border-dashed border-line p-6 text-center text-xs text-mist-500">
+                No agent activity in this window — or run migration 018 to enable this panel.
+              </p>
+            ) : (
+              <div className="mt-4 h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={riskyAgents} margin={{ top: 8, right: 8, bottom: 0, left: -8 }} layout="vertical">
+                    <CartesianGrid stroke="rgba(148,163,184,0.12)" horizontal={false} />
+                    <XAxis type="number" tick={{ fill: palette.tick, fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis type="category" dataKey="agent" width={128} tick={{ fill: palette.tickSoft, fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(220,38,38,0.08)' }} />
+                    <Bar dataKey="blocked" name="Blocked" fill={palette.blocked} radius={[6, 6, 6, 6]} barSize={18} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-line bg-ink-950/60 p-5">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-semibold text-mist-200">What we&apos;re catching</h4>
+              <span className="text-xs text-mist-600">{range}</span>
+            </div>
+            {detectionCategories.length === 0 ? (
+              <p className="mt-4 rounded-lg border border-dashed border-line p-6 text-center text-xs text-mist-500">
+                No detections in this window — or run migration 018 to enable this panel.
+              </p>
+            ) : (
+              <div className="mt-4 h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={detectionCategories} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
+                    <CartesianGrid stroke="rgba(148,163,184,0.12)" vertical={false} />
+                    <XAxis dataKey="category" tick={{ fill: palette.tick, fontSize: 10 }} axisLine={false} tickLine={false} interval={0} angle={-18} dy={12} height={54} />
+                    <YAxis tick={{ fill: palette.tick, fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(122,162,255,0.08)' }} />
+                    <Bar dataKey="hits" name="Detections" fill={palette.bar} radius={[6, 6, 0, 0]} barSize={22} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </div>
         </div>
       </div>

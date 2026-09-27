@@ -136,6 +136,22 @@ export const sourceUsage: SourceUsage[] = [
   { source: 'Cloud Storage', requests: 2971 },
 ];
 
+export const riskyAgents = [
+  { agent: 'Support Copilot', requests: 4820, blocked: 214 },
+  { agent: 'Sales Assistant', requests: 3610, blocked: 96 },
+  { agent: 'Data Export Bot', requests: 1980, blocked: 61 },
+  { agent: 'HR Helper', requests: 1240, blocked: 22 },
+  { agent: 'Code Reviewer', requests: 2310, blocked: 9 },
+];
+
+export const detectionCategories = [
+  { category: 'email', hits: 312 },
+  { category: 'phone', hits: 188 },
+  { category: 'credentials', hits: 96 },
+  { category: 'credit_card', hits: 41 },
+  { category: 'api_key', hits: 27 },
+];
+
 export const requestExamples: RequestExample[] = [
   {
     id: 'req-blocked',

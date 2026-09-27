@@ -1,12 +1,25 @@
 import {
+  detectionCategories as mockDetectionCategories,
   metrics as mockMetrics,
   modelUsage as mockModelUsage,
   requestSeries as mockSeries,
   riskDistribution as mockRisk,
+  riskyAgents as mockRiskyAgents,
   sourceUsage as mockSourceUsage,
 } from '../data/mock';
 import { getActiveOrganizationId, getSupabase, isSupabaseConfigured } from '../lib/supabase';
 import type { Metric, ModelUsage, RiskSlice, SourceUsage, TimePoint } from '../types';
+
+export interface RiskyAgent {
+  agent: string;
+  requests: number;
+  blocked: number;
+}
+
+export interface DetectionCategory {
+  category: string;
+  hits: number;
+}
 
 export interface DashboardData {
   metrics: Metric[];
@@ -14,6 +27,8 @@ export interface DashboardData {
   risk: RiskSlice[];
   modelUsage: ModelUsage[];
   sourceUsage: SourceUsage[];
+  riskyAgents: RiskyAgent[];
+  detectionCategories: DetectionCategory[];
   /** True when the numbers came from Supabase instead of mock data. */
   live: boolean;
 }
@@ -40,6 +55,26 @@ async function loadLive(range: Range): Promise<DashboardData> {
   ]);
   const firstError = [metricsRes, seriesRes, riskRes, modelsRes, sourcesRes].find((res) => res.error);
   if (firstError?.error) throw new Error(`Could not load dashboard metrics: ${firstError.error.message}`);
+
+  // The 018 aggregates are optional: if the user has not run that migration
+  // yet, the panels render empty instead of breaking the whole dashboard.
+  const [riskyAgentsRes, detectionsRes] = await Promise.all([
+    supabase.rpc('get_risky_agents', { p_organization_id: orgId, p_days: rangeDays[range] }),
+    supabase.rpc('get_detection_categories', { p_organization_id: orgId, p_days: rangeDays[range] }),
+  ]);
+  const riskyAgents: RiskyAgent[] = riskyAgentsRes.error
+    ? []
+    : (((riskyAgentsRes.data ?? []) as { agent: string; requests: number; blocked: number }[]).map((row) => ({
+        agent: row.agent,
+        requests: Number(row.requests),
+        blocked: Number(row.blocked),
+      })) ?? []);
+  const detectionCategories: DetectionCategory[] = detectionsRes.error
+    ? []
+    : (((detectionsRes.data ?? []) as { category: string; hits: number }[]).map((row) => ({
+        category: row.category,
+        hits: Number(row.hits),
+      })) ?? []);
 
   const m = metricsRes.data as {
     total_requests: number;
@@ -98,6 +133,8 @@ async function loadLive(range: Range): Promise<DashboardData> {
       source: row.source,
       requests: Number(row.requests),
     })),
+    riskyAgents,
+    detectionCategories,
     live: true,
   };
 }
@@ -124,6 +161,8 @@ export async function getDashboard(range: Range): Promise<DashboardData> {
     risk: mockRisk,
     modelUsage: mockModelUsage,
     sourceUsage: mockSourceUsage,
+    riskyAgents: mockRiskyAgents,
+    detectionCategories: mockDetectionCategories,
     live: false,
   };
 }
