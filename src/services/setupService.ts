@@ -60,7 +60,7 @@ export function setupConnectComplete(status: SetupStatus): boolean {
  * the network level and hang the caller forever. Returns null on timeout so
  * callers can fail open (dashboard) or show a retry instead of spinning.
  */
-export async function getSetupStatusSafe(timeoutMs = 15000): Promise<SetupStatus | null> {
+export async function getSetupStatusSafe(timeoutMs = 20000): Promise<SetupStatus | null> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const timeout = new Promise<null>((resolve) => {
@@ -149,22 +149,43 @@ export async function fetchPendingMigrationsSQL(missingFiles: string[]): Promise
   return parts.join('\n\n');
 }
 
+/** Race a promise against a timeout. The loser is discarded; the winner's value is used. */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('timed out')), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 /** Check which migrations are missing by probing for their tables. Never throws. */
 async function checkMigrations(
   supabase: NonNullable<ReturnType<typeof getSupabase>>,
 ): Promise<MigrationStatus> {
-  const missingFiles: string[] = [];
-  for (const { table, column, file } of MIGRATION_TABLES) {
-    const { error } = await supabase.from(table).select(column ?? 'id', { head: true }).limit(1);
-    if (!error) continue;
-    // 42P01 = table missing, 42703 = column missing (a later migration not applied).
-    if ((error as { code?: string }).code === '42P01' || (error as { code?: string }).code === '42703') {
-      if (!missingFiles.includes(file)) missingFiles.push(file);
-      continue;
-    }
-    // A real error (RLS, network…) — don't claim anything is missing.
-    return { state: 'unknown', missingFiles: [] };
-  }
+  // All probes run at once (not one-by-one) so a slow connection doesn't
+  // stack 8 round-trips. Each probe gets its own 6s cap.
+  const results = await Promise.all(
+    MIGRATION_TABLES.map(async ({ table, column, file }) => {
+      try {
+        const { error } = await withTimeout(
+          Promise.resolve(supabase.from(table).select(column ?? 'id', { head: true }).limit(1)),
+          6000,
+        );
+        if (!error) return { file, missing: false, unknown: false };
+        // 42P01 = table missing, 42703 = column missing (a later migration not applied).
+        const code = (error as { code?: string }).code;
+        if (code === '42P01' || code === '42703') return { file, missing: true, unknown: false };
+        // A real error (RLS, network…) — don't claim anything is missing.
+        return { file, missing: false, unknown: true };
+      } catch {
+        return { file, missing: false, unknown: true };
+      }
+    }),
+  );
+  if (results.some((r) => r.unknown)) return { state: 'unknown', missingFiles: [] };
+  const missingFiles = [...new Set(results.filter((r) => r.missing).map((r) => r.file))];
   return missingFiles.length > 0
     ? { state: 'missing', missingFiles }
     : { state: 'ok', missingFiles: [] };
@@ -217,10 +238,10 @@ export async function getSetupStatus(): Promise<SetupStatus> {
       .is('revoked_at', null),
     supabase.from('ai_requests').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
     checkMigrations(supabase),
-    probeEdgeFunction(EDGE_FUNCTION_NAME),
-    probeEdgeFunction(INGEST_FUNCTION_NAME),
-    probeEdgeFunction(PROVIDER_FUNCTION_NAME),
-    probeEdgeFunction(GATEWAY_FUNCTION_NAME),
+    withTimeout(probeEdgeFunction(EDGE_FUNCTION_NAME), 8000).catch((): EdgeFunctionStatus => 'unknown'),
+    withTimeout(probeEdgeFunction(INGEST_FUNCTION_NAME), 8000).catch((): EdgeFunctionStatus => 'unknown'),
+    withTimeout(probeEdgeFunction(PROVIDER_FUNCTION_NAME), 8000).catch((): EdgeFunctionStatus => 'unknown'),
+    withTimeout(probeEdgeFunction(GATEWAY_FUNCTION_NAME), 8000).catch((): EdgeFunctionStatus => 'unknown'),
     supabase.from('organizations').select('settings,enforcement_mode').eq('id', orgId).maybeSingle(),
     supabase.from('ai_models').select('name,provider').eq('organization_id', orgId).limit(10),
     supabase.from('data_sources').select('id', { count: 'exact', head: true }).eq('organization_id', orgId),
