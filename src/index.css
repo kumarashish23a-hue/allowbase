@@ -18,12 +18,12 @@
   --color-mist-500: #78716c;
   --color-mist-600: #a8a29e;
 
-  --color-accent-200: #ccfbf1;
-  --color-accent-300: #5eead4;
-  --color-accent-400: #2dd4bf;
-  --color-accent-500: #0d9488;
-  --color-accent-600: #0f766e;
-  --color-accent-ink: #042f2b;
+  --color-accent-200: #fecdd3;
+  --color-accent-300: #fda4af;
+  --color-accent-400: #fb7185;
+  --color-accent-500: #e11d48;
+  --color-accent-600: #be123c;
+  --color-accent-ink: #4c0519;
 
   --color-mint-400: #047857;
   --color-amber-400: #b45309;
@@ -98,12 +98,12 @@ html {
   --color-mist-500: #64748b;
   --color-mist-600: #475569;
 
-  --color-accent-200: #164e63;
-  --color-accent-300: #22d3ee;
-  --color-accent-400: #67e8f9;
-  --color-accent-500: #22d3ee;
-  --color-accent-600: #a5f3fc;
-  --color-accent-ink: #06202a;
+  --color-accent-200: #4c0519;
+  --color-accent-300: #f43f5e;
+  --color-accent-400: #fb7185;
+  --color-accent-500: #f43f5e;
+  --color-accent-600: #fecdd3;
+  --color-accent-ink: #4c0519;
 
   --color-mint-400: #34d399;
   --color-amber-400: #f59e0b;
@@ -132,12 +132,12 @@ html {
   --color-mist-500: #978266;
   --color-mist-600: #6c5c47;
 
-  --color-accent-200: #300501;
-  --color-accent-300: #981706;
-  --color-accent-400: #dd2c11;
-  --color-accent-500: #f9492b;
-  --color-accent-600: #f18b6f;
-  --color-accent-ink: #220a04;
+  --color-accent-200: #4c0519;
+  --color-accent-300: #e11d48;
+  --color-accent-400: #f43f5e;
+  --color-accent-500: #fb7185;
+  --color-accent-600: #fecdd3;
+  --color-accent-ink: #2a0208;
 
   --color-mint-400: #fa6996;
   --color-amber-400: #2688f9;
