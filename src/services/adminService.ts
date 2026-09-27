@@ -25,35 +25,41 @@ export const MEMBER_ROLES = ['owner', 'admin', 'security', 'developer', 'analyst
 /** Workspace + role for the /admin access gate. One query, resilient to transient hangs. */
 export interface GateMembership {
   role: string;
-  organization: { id: string; name: string; slug: string } | null;
+  organization_id: string;
 }
 
-/**
- * The caller's first active membership with its organization. Retries hung
- * requests (aborted after 8s) up to 3 times before throwing.
- */
-export async function getGateMembership(userId: string): Promise<GateMembership | null> {
-  const supabase = requireClient();
+async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
   let lastError: unknown = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
     try {
-      const { data, error } = await supabase
-        .from('organization_members')
-        .select('role, organizations(id, name, slug)')
-        .eq('user_id', userId)
-        .eq('status', 'active')
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .abortSignal(AbortSignal.timeout(8000))
-        .maybeSingle();
-      if (error) throw error;
-      return (data ?? null) as GateMembership | null;
+      return await fn();
     } catch (err) {
       lastError = err;
-      if (attempt < 2) await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+      if (attempt < attempts - 1) await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
     }
   }
   throw lastError instanceof Error ? lastError : new Error('Could not reach the database.');
+}
+
+/**
+ * The caller's first active membership. Retries hung requests (aborted after
+ * 8s) up to 3 times before throwing. Uses a plain select — no embeds.
+ */
+export async function getGateMembership(userId: string): Promise<GateMembership | null> {
+  const supabase = requireClient();
+  return withRetry(async () => {
+    const { data, error } = await supabase
+      .from('organization_members')
+      .select('role, organization_id')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .abortSignal(AbortSignal.timeout(8000))
+      .maybeSingle();
+    if (error) throw error;
+    return (data ?? null) as GateMembership | null;
+  });
 }
 
 export interface MemberStats {

@@ -66,7 +66,30 @@ export function Admin() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [gate, setGate] = useState<'loading' | 'denied' | 'allowed'>('loading');
   const [gateError, setGateError] = useState<string | null>(null);
+  const [connTest, setConnTest] = useState<string | null>(null);
   const gateStepRef = useRef('starting');
+
+  const testConnection = useCallback(async () => {
+    setConnTest('Testing…');
+    try {
+      const supabase = getSupabase();
+      if (!supabase) {
+        setConnTest('Supabase is not configured.');
+        return;
+      }
+      const started = Date.now();
+      const res = await fetch(`${supabase.supabaseUrl}/rest/v1/`, {
+        signal: AbortSignal.timeout(10000),
+      });
+      setConnTest(
+        `Reached the database server (status ${res.status}) in ${((Date.now() - started) / 1000).toFixed(1)}s.`,
+      );
+    } catch (err) {
+      setConnTest(
+        `Could NOT reach the database server: ${err instanceof Error ? err.message : 'request failed'}. If this persists, try a different network (e.g. mobile hotspot).`,
+      );
+    }
+  }, []);
   const [tab, setTab] = useState<TabId>('clients');
   const [orgs, setOrgs] = useState<OrganizationRow[]>([]);
   const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
@@ -148,7 +171,7 @@ export function Admin() {
         gateStepRef.current = 'finding your workspace';
         const membership = await getGateMembership(userId).catch(() => null);
         if (cancelled) return;
-        if (!membership?.organization) {
+        if (!membership) {
           finish('denied', 'No workspace found for your account.');
           return;
         }
@@ -257,14 +280,18 @@ export function Admin() {
           manage clients, members, policies, agents, and API keys.
         </p>
         {gateError ? <p className="mt-3 max-w-xl text-sm text-rose-400">{gateError}</p> : null}
-        <div className="mt-6 flex gap-3">
+        <div className="mt-6 flex flex-wrap gap-3">
           <button type="button" onClick={() => window.location.reload()} className={btnGhost}>
             Try again
           </button>
           <Link to="/app" className={btnGhost}>
             Back to console
           </Link>
+          <button type="button" onClick={testConnection} className={btnGhost}>
+            Test connection
+          </button>
         </div>
+        {connTest ? <p className="mt-3 max-w-xl text-xs text-mist-400">{connTest}</p> : null}
       </div>
     );
   }
