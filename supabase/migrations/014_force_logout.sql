@@ -14,5 +14,5 @@
 alter table public.organization_members
   add column if not exists force_logout_at timestamptz;
 
-comment on column public.organization_members.force_logout_at =
+comment on column public.organization_members.force_logout_at is
   'Set by an owner/admin to remotely sign this member out of the app.';
