@@ -72,11 +72,10 @@ export async function getSetupStatusSafe(timeoutMs = 15000): Promise<SetupStatus
   }
 }
 const EDGE_FUNCTION_CODE_URL =
-  'https://raw.githubusercontent.com/kumarashish23a-hue/dataplane/main/supabase/functions/evaluate-ai-request/index.ts';
+  'https://raw.githubusercontent.com/kumarashish23a-hue/allowbase/main/supabase/functions/evaluate-ai-request/index.ts';
 
 /** Tables (and columns) that prove their migration has been applied, and the file to run if not. */
-const MIGRATION_TABLES: { table: string; column?: string; file: string }[] = [
-  { table: 'organizations', file: '001_core.sql → 009_seed.sql' },
+const MIGRATION_TABLES: { table: string; column?: string; file: string }[] = [  { table: 'organizations', file: '001_core.sql → 009_seed.sql' },
   { table: 'ai_requests', file: '005_requests.sql' },
   { table: 'approval_requests', file: '010_hardening.sql' },
   { table: 'api_keys', file: '011_api_keys.sql' },
@@ -85,6 +84,70 @@ const MIGRATION_TABLES: { table: string; column?: string; file: string }[] = [
   { table: 'organizations', column: 'enforcement_mode', file: '015_enforcement_mode.sql' },
   { table: 'ai_provider_connections', file: '017_provider_connections.sql' },
 ];
+
+/** Every migration file in apply order. */
+const MIGRATION_FILES_IN_ORDER = [
+  '001_core.sql',
+  '002_data.sql',
+  '003_ai.sql',
+  '004_policies.sql',
+  '005_requests.sql',
+  '006_risk_audit.sql',
+  '007_rls.sql',
+  '008_functions.sql',
+  '009_seed.sql',
+  '010_hardening.sql',
+  '011_api_keys.sql',
+  '012_content_detection.sql',
+  '013_admin_member_reads.sql',
+  '014_force_logout.sql',
+  '015_enforcement_mode.sql',
+  '016_mask_action.sql',
+  '017_provider_connections.sql',
+  '018_dashboard_graphs.sql',
+  '019_provider_condition.sql',
+];
+
+const MIGRATION_RAW_BASE =
+  'https://raw.githubusercontent.com/kumarashish23a-hue/allowbase/main/supabase/migrations/';
+
+/**
+ * Expand the wizard's missing-file entries (which may be ranges like
+ * '001_core.sql → 009_seed.sql') into the ordered list of individual files.
+ */
+export function expandMissingFiles(missingFiles: string[]): string[] {
+  const out: string[] = [];
+  for (const entry of missingFiles) {
+    if (entry.includes('→')) {
+      const [from, to] = entry.split('→').map((s) => s.trim());
+      const start = MIGRATION_FILES_IN_ORDER.indexOf(from);
+      const end = MIGRATION_FILES_IN_ORDER.indexOf(to);
+      if (start !== -1 && end !== -1 && end >= start) {
+        out.push(...MIGRATION_FILES_IN_ORDER.slice(start, end + 1));
+      }
+    } else if (MIGRATION_FILES_IN_ORDER.includes(entry)) {
+      out.push(entry);
+    }
+  }
+  return [...new Set(out)];
+}
+
+/**
+ * Fetch every pending migration and bundle them into ONE sql script, in
+ * order — so setup is a single copy-paste into the SQL editor.
+ */
+export async function fetchPendingMigrationsSQL(missingFiles: string[]): Promise<string> {
+  const files = expandMissingFiles(missingFiles);
+  if (files.length === 0) throw new Error('Nothing to copy — the database is up to date.');
+  const parts: string[] = [];
+  for (const file of files) {
+    const res = await fetch(`${MIGRATION_RAW_BASE}${file}`);
+    if (!res.ok) throw new Error(`Could not download ${file} from GitHub.`);
+    const sql = (await res.text()).trim();
+    parts.push(`-- =================================================================\n-- ${file}\n-- =================================================================\n${sql}`);
+  }
+  return parts.join('\n\n');
+}
 
 /** Check which migrations are missing by probing for their tables. Never throws. */
 async function checkMigrations(

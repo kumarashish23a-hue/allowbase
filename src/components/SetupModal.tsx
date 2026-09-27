@@ -34,6 +34,8 @@ import {
   GATEWAY_FUNCTION_NAME,
   INGEST_FUNCTION_NAME,
   PROVIDER_FUNCTION_NAME,
+  expandMissingFiles,
+  fetchPendingMigrationsSQL,
   getFunctionsDashboardUrl,
   getSetupStatusSafe,
   getSqlEditorUrl,
@@ -114,10 +116,39 @@ export function SetupModal({ open, onClose, onSignIn, onTrySimulator, blocking =
   const [modeConfirmed, setModeConfirmed] = useState(false);
   const [settingMode, setSettingMode] = useState(false);
   const [prereqFix, setPrereqFix] = useState<'db' | 'services' | null>(null);
+  const [copyingSql, setCopyingSql] = useState(false);
+  const [sqlCopied, setSqlCopied] = useState(false);
+  const [sqlCopyError, setSqlCopyError] = useState<string | null>(null);
+  const [fallbackSql, setFallbackSql] = useState<string | null>(null);
+
+  /** Bundle every pending migration into one script and copy it. */
+  const copyAllPendingSql = async (missingFiles: string[]) => {
+    setCopyingSql(true);
+    setSqlCopied(false);
+    setSqlCopyError(null);
+    setFallbackSql(null);
+    try {
+      const sql = await fetchPendingMigrationsSQL(missingFiles);
+      try {
+        await navigator.clipboard.writeText(sql);
+        setSqlCopied(true);
+      } catch {
+        // Clipboard blocked (permissions, non-secure context) — show it for manual copy.
+        setFallbackSql(sql);
+      }
+    } catch (e) {
+      setSqlCopyError(e instanceof Error ? e.message : 'Could not fetch the SQL.');
+    } finally {
+      setCopyingSql(false);
+    }
+  };
 
   const refresh = async () => {
     setLoading(true);
     setError(null);
+    setSqlCopied(false);
+    setSqlCopyError(null);
+    setFallbackSql(null);
     try {
       const next = await getSetupStatusSafe();
       if (!next) {
@@ -269,7 +300,7 @@ export function SetupModal({ open, onClose, onSignIn, onTrySimulator, blocking =
   const allDone = !!status && doneCount === totalSteps;
   const functionsUrl = getFunctionsDashboardUrl();
   const sqlEditorUrl = getSqlEditorUrl();
-  const migrationsUrl = 'https://github.com/kumarashish23a-hue/dataplane/tree/main/supabase/migrations';
+  const migrationsUrl = 'https://github.com/kumarashish23a-hue/allowbase/tree/main/supabase/migrations';
 
   const functionStatusLabel = (value: EdgeFunctionStatus) =>
     value === 'deployed' ? 'live' : value === 'missing' ? 'not deployed' : 'could not check';
@@ -291,6 +322,7 @@ export function SetupModal({ open, onClose, onSignIn, onTrySimulator, blocking =
       return <p className="text-sm text-mist-400">All tables are in place.</p>;
     }
     if (status.migrations.state === 'missing') {
+      const pendingCount = expandMissingFiles(status.migrations.missingFiles).length;
       return (
         <>
           <p className="text-sm text-mist-400">
@@ -308,19 +340,29 @@ export function SetupModal({ open, onClose, onSignIn, onTrySimulator, blocking =
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-sm text-mist-400">
-            Copy each file from{' '}
-            <a
-              href={migrationsUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="text-accent-400 underline-offset-2 hover:underline"
-            >
-              GitHub
-            </a>
-            , paste it into the SQL editor, and run it — in order.
+          <p className="mt-3 text-sm text-mist-400">
+            One paste is enough — this bundles every pending file into a single script, in order.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={copyingSql}
+              onClick={() => void copyAllPendingSql(status.migrations.missingFiles)}
+              className={primaryBtn}
+            >
+              {copyingSql ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : sqlCopied ? (
+                <Check size={14} />
+              ) : (
+                <Copy size={14} />
+              )}
+              {copyingSql
+                ? 'Preparing…'
+                : sqlCopied
+                  ? 'Copied!'
+                  : `Copy all ${pendingCount} pending SQL ${pendingCount === 1 ? 'file' : 'files'}`}
+            </button>
             {sqlEditorUrl && (
               <a
                 href={sqlEditorUrl}
@@ -332,9 +374,41 @@ export function SetupModal({ open, onClose, onSignIn, onTrySimulator, blocking =
               </a>
             )}
             <button type="button" onClick={() => void refresh()} className={secondaryBtn}>
-              <RefreshCw size={14} /> I've run them — check again
+              <RefreshCw size={14} /> I've run it — check again
             </button>
           </div>
+          {sqlCopied ? (
+            <p className="mt-2 text-sm text-emerald-400">
+              Copied. Paste it into the SQL editor, press Run, then “I've run it — check again”.
+            </p>
+          ) : null}
+          {sqlCopyError ? <p className="mt-2 text-sm text-rose-400">{sqlCopyError}</p> : null}
+          {fallbackSql ? (
+            <div className="mt-3">
+              <p className="text-sm text-mist-400">
+                Automatic copy was blocked — select all below and copy it manually:
+              </p>
+              <textarea
+                readOnly
+                value={fallbackSql}
+                rows={8}
+                onFocus={(event) => event.target.select()}
+                className="mt-2 w-full rounded-xl border border-line bg-ink-950/70 p-3 font-mono text-xs text-mist-200 focus:border-accent-400/60 focus:outline-none"
+              />
+            </div>
+          ) : null}
+          <p className="mt-3 text-xs text-mist-600">
+            Prefer doing it file by file? Grab them from{' '}
+            <a
+              href={migrationsUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-accent-400 underline-offset-2 hover:underline"
+            >
+              GitHub
+            </a>
+            .
+          </p>
         </>
       );
     }
