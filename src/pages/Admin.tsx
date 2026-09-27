@@ -8,25 +8,17 @@ import { createPolicy, type PolicyDraft } from '../services/policyService';
 import type { OrganizationRow } from '../lib/db';
 import type { Agent } from '../types';
 import {
-  MEMBER_ROLES,
   addClient,
-  addMember,
   deleteOrganization,
   deletePolicy,
-  forceLogoutMember,
   getGateMembership,
-  getMemberStats,
   listAdminPolicies,
-  listMembers,
-  removeMember,
   renameOrganization,
-  setMemberRole,
   setPolicyStatus,
   switchOrganization,
-  type AdminMember,
   type AdminPolicy,
-  type MemberStats,
 } from '../services/adminService';
+import { MembersPanel } from '../components/MembersPanel';
 import { getMyOrganizations, setEnforcementMode } from '../services/organizationService';
 import type { Decision } from '../types';
 
@@ -97,8 +89,6 @@ export function Admin() {
   const [tab, setTab] = useState<TabId>('clients');
   const [orgs, setOrgs] = useState<OrganizationRow[]>([]);
   const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
-  const [members, setMembers] = useState<AdminMember[]>([]);
-  const [memberStats, setMemberStats] = useState<MemberStats | null>(null);
   const [policies, setPolicies] = useState<AdminPolicy[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [keys, setKeys] = useState<ApiKeyItem[]>([]);
@@ -111,8 +101,6 @@ export function Admin() {
   const [editingOrg, setEditingOrg] = useState<{ id: string; name: string } | null>(null);
   const [newPolicy, setNewPolicy] = useState({ name: '', description: '', effect: 'BLOCK' as Decision });
   const [newAgent, setNewAgent] = useState({ name: '', description: '' });
-  const [newMemberId, setNewMemberId] = useState('');
-  const [newMemberRole, setNewMemberRole] = useState<string>('viewer');
   const [newKeyName, setNewKeyName] = useState('');
   const [createdKey, setCreatedKey] = useState<{ name: string; key: string } | null>(null);
   const [copiedKey, setCopiedKey] = useState(false);
@@ -124,28 +112,21 @@ export function Admin() {
     setActiveOrgId(orgId);
     if (!orgId) {
       setOrgs([]);
-      setMembers([]);
       setPolicies([]);
       setAgents([]);
       setKeys([]);
-      setMemberStats(null);
       return;
     }
-    const [orgList, memberList, policyList, agentList, keyList] = await Promise.all([
+    const [orgList, policyList, agentList, keyList] = await Promise.all([
       getMyOrganizations(),
-      listMembers(orgId),
       listAdminPolicies(orgId),
       listAgents().catch(() => [] as Agent[]),
       listApiKeys().catch(() => [] as ApiKeyItem[]),
     ]);
     setOrgs(orgList);
-    setMembers(memberList);
     setPolicies(policyList);
     setAgents(agentList);
     setKeys(keyList);
-    getMemberStats(orgId)
-      .then(setMemberStats)
-      .catch(() => setMemberStats(null));
   }, []);
 
   useEffect(() => {
@@ -543,151 +524,7 @@ export function Admin() {
         ) : null}
 
         {tab === 'members' ? (
-          <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
-            <div className={cardCls}>
-              <h2 className="text-sm font-semibold text-mist-100">Members of {activeOrg?.name}</h2>
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:max-w-md">
-              <div className="rounded-xl border border-line bg-ink-900/70 px-4 py-3">
-                <p className="text-2xl font-bold text-mist-100">{memberStats?.total ?? '…'}</p>
-                <p className="mt-1 text-xs text-mist-500">Total logins (registered)</p>
-              </div>
-              <div className="rounded-xl border border-line bg-ink-900/70 px-4 py-3">
-                <p className="text-2xl font-bold text-mist-100">
-                  {memberStats ? (memberStats.activeLast24h ?? '—') : '…'}
-                </p>
-                <p className="mt-1 text-xs text-mist-500">Active in last 24 hours</p>
-              </div>
-            </div>
-            <div className="mt-6 space-y-3">
-              {members.length > 0 && members.every((m) => !m.full_name) ? (
-                <p className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2.5 text-xs text-amber-400">
-                  Member names need one database update: run{' '}
-                  <span className="font-mono">supabase/migrations/013_admin_member_reads.sql</span>{' '}
-                  once in your Supabase SQL editor. The member list below works without it.
-                </p>
-              ) : null}
-              {members.map((member) => (
-                <div
-                  key={member.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-ink-900/70 px-4 py-3"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-mist-100">
-                      {member.full_name ?? `User ${member.user_id.slice(0, 8)}`}
-                    </p>
-                    <p className="text-xs text-mist-500">
-                      {member.status} · joined {new Date(member.created_at).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={member.role}
-                      disabled={busy}
-                      onChange={(e) =>
-                        void run(
-                          () => setMemberRole(member.id, e.target.value),
-                          'Role updated.',
-                        )
-                      }
-                      className="rounded-xl border border-line bg-ink-950/70 px-3 py-1.5 text-xs text-mist-100 focus:border-accent-400/60 focus:outline-none"
-                      aria-label="Member role"
-                    >
-                      {MEMBER_ROLES.map((role) => (
-                        <option key={role} value={role}>
-                          {role}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            'Sign this member out on all their devices? They can sign back in afterwards.',
-                          )
-                        ) {
-                          void run(
-                            () =>
-                              activeOrgId
-                                ? forceLogoutMember(activeOrgId, member.id, member.user_id)
-                                : Promise.reject(new Error('No active client.')),
-                            'Sign-out requested. Their app will sign them out shortly.',
-                          );
-                        }
-                      }}
-                      className={btnGhost}
-                    >
-                      Log out
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => {
-                        if (window.confirm('Remove this member from the organization?')) {
-                          void run(() => removeMember(member.id), 'Member removed.');
-                        }
-                      }}
-                      className={`${btnGhost} inline-flex items-center gap-1.5 text-rose-400 hover:text-rose-300`}
-                    >
-                      <Trash2 size={13} /> Remove
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {members.length === 0 ? <p className="text-sm text-mist-500">No members.</p> : null}
-            </div>
-            </div>
-            <div className={cardCls}>
-              <h2 className="text-sm font-semibold text-mist-100">Add member</h2>
-              <p className="mt-1 text-xs text-mist-500">
-                The person must already have an account — ask them to copy their user ID from
-                Account (top-right) and paste it here.
-              </p>
-              <form
-                className="mt-4 space-y-4"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!newMemberId.trim() || !activeOrgId) return;
-                  void run(
-                    () =>
-                      addMember(activeOrgId, newMemberId, newMemberRole).then(() => {
-                        setNewMemberId('');
-                        setNewMemberRole('viewer');
-                      }),
-                    'Member added.',
-                  );
-                }}
-              >
-                <Field label="User ID">
-                  <input
-                    value={newMemberId}
-                    onChange={(e) => setNewMemberId(e.target.value)}
-                    placeholder="e.g. 3f9a2c1d-…"
-                    className={`${inputCls} font-mono`}
-                  />
-                </Field>
-                <Field label="Role">
-                  <select
-                    value={newMemberRole}
-                    onChange={(e) => setNewMemberRole(e.target.value)}
-                    className={inputCls}
-                  >
-                    {MEMBER_ROLES.map((role) => (
-                      <option key={role} value={role}>
-                        {role}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <button type="submit" disabled={busy || !newMemberId.trim()} className={btnPrimary}>
-                  <span className="inline-flex items-center gap-2">
-                    <Plus size={14} /> Add member
-                  </span>
-                </button>
-              </form>
-            </div>
-          </div>
+          <MembersPanel orgId={activeOrgId} orgName={activeOrg?.name} />
         ) : null}
 
         {tab === 'policies' ? (
