@@ -1,10 +1,16 @@
-import { Plus } from 'lucide-react';
+import { Pause, Play, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { PolicyBuilderModal } from '../components/PolicyModals';
 import { Reveal } from '../components/Reveal';
 import { SectionHeading } from '../components/SectionHeading';
 import { isSupabaseConfigured } from '../lib/supabase';
-import { createPolicy, listPolicies, type PolicyDraft } from '../services/policyService';
+import {
+  createPolicy,
+  deletePolicy,
+  listPolicies,
+  setPolicyStatus,
+  type PolicyDraft,
+} from '../services/policyService';
 import type { Policy } from '../types';
 
 const effectTone: Record<Policy['effect'], string> = {
@@ -17,6 +23,8 @@ const effectTone: Record<Policy['effect'], string> = {
 export function PolicyEngine() {
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [open, setOpen] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [cardError, setCardError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,6 +46,36 @@ export function PolicyEngine() {
     }
     const created = await createPolicy(draft);
     setPolicies((current) => [created, ...current]);
+  };
+
+  const handleToggleStatus = async (policy: Policy) => {
+    setCardError(null);
+    setBusyId(policy.id);
+    try {
+      const next = policy.status === 'active' ? 'paused' : 'active';
+      await setPolicyStatus(policy.id, next);
+      setPolicies((current) =>
+        current.map((p) => (p.id === policy.id ? { ...p, status: next } : p)),
+      );
+    } catch (e) {
+      setCardError(e instanceof Error ? e.message : 'Could not update the policy.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDelete = async (policy: Policy) => {
+    if (!window.confirm(`Delete the policy "${policy.name}"? This cannot be undone.`)) return;
+    setCardError(null);
+    setBusyId(policy.id);
+    try {
+      await deletePolicy(policy.id);
+      setPolicies((current) => current.filter((p) => p.id !== policy.id));
+    } catch (e) {
+      setCardError(e instanceof Error ? e.message : 'Could not delete the policy.');
+    } finally {
+      setBusyId(null);
+    }
   };
 
   return (
@@ -62,11 +100,18 @@ export function PolicyEngine() {
             <div className="flex h-full flex-col rounded-xl border border-line bg-ink-900/60 p-6 shadow-card transition hover:border-line-strong">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="text-base font-semibold text-mist-100">{policy.name}</h3>
-                <span
-                  className={`rounded-full border px-2.5 py-1 text-[11px] font-bold tracking-[0.12em] ${effectTone[policy.effect]}`}
-                >
-                  {policy.effect}
-                </span>
+                <div className="flex shrink-0 items-center gap-2">
+                  {policy.status !== 'active' ? (
+                    <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] font-bold tracking-[0.12em] text-amber-400">
+                      PAUSED
+                    </span>
+                  ) : null}
+                  <span
+                    className={`rounded-full border px-2.5 py-1 text-[11px] font-bold tracking-[0.12em] ${effectTone[policy.effect]}`}
+                  >
+                    {policy.effect}
+                  </span>
+                </div>
               </div>
               <p className="mt-2 text-sm text-mist-400">{policy.description}</p>
               <div className="mt-5 space-y-2 text-sm">
@@ -84,11 +129,37 @@ export function PolicyEngine() {
                 <p className="pt-2 text-xs font-semibold uppercase tracking-[0.18em] text-mist-600">Then</p>
                 <p className="text-sm text-mist-200">{policy.action}</p>
               </div>
-              <p className="mt-auto pt-5 text-xs text-mist-600">Updated {policy.updated}</p>
+              <div className="mt-auto flex items-center justify-between gap-2 pt-5">
+                <p className="text-xs text-mist-600">Updated {policy.updated}</p>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={busyId === policy.id}
+                    onClick={() => void handleToggleStatus(policy)}
+                    title={policy.status === 'active' ? 'Pause this policy' : 'Resume this policy'}
+                    aria-label={policy.status === 'active' ? `Pause ${policy.name}` : `Resume ${policy.name}`}
+                    className="inline-flex items-center gap-1 rounded-lg border border-line px-2 py-1.5 text-xs text-mist-400 transition hover:border-line-strong hover:text-mist-100 disabled:opacity-40"
+                  >
+                    {policy.status === 'active' ? <Pause size={12} /> : <Play size={12} />}
+                    {policy.status === 'active' ? 'Pause' : 'Resume'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busyId === policy.id}
+                    onClick={() => void handleDelete(policy)}
+                    title="Delete this policy"
+                    aria-label={`Delete ${policy.name}`}
+                    className="inline-flex items-center gap-1 rounded-lg border border-line px-2 py-1.5 text-xs text-mist-400 transition hover:border-rose-400/50 hover:text-rose-400 disabled:opacity-40"
+                  >
+                    <Trash2 size={12} /> Delete
+                  </button>
+                </div>
+              </div>
             </div>
           </Reveal>
         ))}
       </div>
+      {cardError ? <p className="mt-4 text-center text-sm text-rose-400">{cardError}</p> : null}
 
       <Reveal className="mt-10 text-center">
         <button

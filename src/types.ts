@@ -70,6 +70,8 @@ export interface Policy {
   id: string;
   name: string;
   description: string;
+  /** 'active' | 'paused' | 'archived' — a paused policy is skipped by the engine. */
+  status: string;
   conditions: PolicyCondition[];
   action: string;
   effect: Decision;

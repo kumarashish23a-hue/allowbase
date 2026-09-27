@@ -182,6 +182,7 @@ export const policies: Policy[] = [
     id: 'pol-pii',
     name: 'Customer PII',
     description: 'Prevent customer personal data from leaving approved boundaries.',
+    status: 'active',
     conditions: [
       { field: 'Data', operator: '=', value: 'PII' },
       { field: 'Destination', operator: '=', value: 'External AI' },
@@ -194,6 +195,7 @@ export const policies: Policy[] = [
     id: 'pol-eng',
     name: 'Engineering Data',
     description: 'Allow approved internal agents to work with source code safely.',
+    status: 'active',
     conditions: [
       { field: 'Department', operator: '=', value: 'Engineering' },
       { field: 'AI', operator: '=', value: 'Approved Internal Agent' },
@@ -206,6 +208,7 @@ export const policies: Policy[] = [
     id: 'pol-fin',
     name: 'Financial Data',
     description: 'Restrict financial records to the finance organization.',
+    status: 'active',
     conditions: [
       { field: 'Data', operator: '=', value: 'Financial' },
       { field: 'Department', operator: '≠', value: 'Finance' },

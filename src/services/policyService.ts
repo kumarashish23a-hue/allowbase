@@ -22,6 +22,7 @@ export function toPolicy(row: PolicyRow): Policy {
     id: row.id,
     name: row.name,
     description: row.description ?? '',
+    status: row.status,
     conditions: (row.rule?.conditions ?? []).map((condition) => ({
       field: condition.field,
       operator: condition.operator,
@@ -124,4 +125,20 @@ export async function createPolicy(draft: PolicyDraft): Promise<Policy> {
 /** Map a UI Decision to the database action vocabulary (for legacy callers). */
 export function decisionToAction(decision: Decision): PolicyAction {
   return actionMap[decision];
+}
+
+/** Pause or re-activate a policy. A paused policy is skipped by the engine. */
+export async function setPolicyStatus(policyId: string, status: 'active' | 'paused'): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const { error } = await supabase.from('policies').update({ status }).eq('id', policyId);
+  if (error) throw new Error('Could not update the policy. Only owners, admins, or security can do this.');
+}
+
+/** Permanently delete a policy. Cannot be undone. */
+export async function deletePolicy(policyId: string): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const { error } = await supabase.from('policies').delete().eq('id', policyId);
+  if (error) throw new Error('Could not delete the policy. Only owners or admins can do this.');
 }
