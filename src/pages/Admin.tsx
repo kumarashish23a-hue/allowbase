@@ -1,5 +1,5 @@
 import { Bot, Building2, KeyRound, Loader2, Pencil, Plus, ShieldAlert, Trash2, Users } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getActiveOrganizationId, getLocalUserId, getSupabase, isSupabaseConfigured } from '../lib/supabase';
 import { listAgents, setAgentStatus } from '../services/aiAgentService';
@@ -11,6 +11,7 @@ import {
   MEMBER_ROLES,
   addClient,
   deletePolicy,
+  getGateMembership,
   getMemberStats,
   listAdminPolicies,
   listMembers,
@@ -23,11 +24,7 @@ import {
   type AdminPolicy,
   type MemberStats,
 } from '../services/adminService';
-import {
-  getActiveOrganization,
-  getMyOrganizationRole,
-  getMyOrganizations,
-} from '../services/organizationService';
+import { getMyOrganizations } from '../services/organizationService';
 import type { Decision } from '../types';
 
 const tabs = [
@@ -69,6 +66,7 @@ export function Admin() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [gate, setGate] = useState<'loading' | 'denied' | 'allowed'>('loading');
   const [gateError, setGateError] = useState<string | null>(null);
+  const gateStepRef = useRef('starting');
   const [tab, setTab] = useState<TabId>('clients');
   const [orgs, setOrgs] = useState<OrganizationRow[]>([]);
   const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
@@ -120,12 +118,14 @@ export function Admin() {
       setGate(state);
     };
     // Never leave the user staring at "Checking access..." — bail out with a retry.
+    // The step name makes the next failure diagnosable instead of a mystery.
     const timer = window.setTimeout(() => {
+      const step = gateStepRef.current;
       finish(
         'denied',
-        'The access check timed out. Try again — if it keeps happening, sign out and back in.',
+        `The access check timed out${step && step !== 'done' ? ` while ${step}` : ''}. Try again — if it keeps happening, sign out and back in.`,
       );
-    }, 15000);
+    }, 20000);
     (async () => {
       try {
         if (!isSupabaseConfigured()) {
@@ -137,21 +137,28 @@ export function Admin() {
           finish('denied', 'Supabase is not configured.');
           return;
         }
+        gateStepRef.current = 'reading your login';
         const userId = await getLocalUserId();
+        if (cancelled) return;
         if (!userId) {
           finish('denied', null);
           return;
         }
-        const org = await getActiveOrganization().catch(() => null);
-        if (!org) {
+        // One query for workspace + role; it aborts hung requests and retries.
+        gateStepRef.current = 'finding your workspace';
+        const membership = await getGateMembership(userId).catch(() => null);
+        if (cancelled) return;
+        if (!membership?.organization) {
           finish('denied', 'No workspace found for your account.');
           return;
         }
-        const role = await getMyOrganizationRole(org.id).catch(() => null);
+        gateStepRef.current = 'checking your role';
+        const role = membership.role;
         if (role !== 'owner' && role !== 'admin') {
           finish('denied', null);
           return;
         }
+        gateStepRef.current = 'done';
         finish('allowed', null);
         await refresh().catch((err: unknown) => {
           if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load admin data.');

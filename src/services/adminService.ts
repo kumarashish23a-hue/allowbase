@@ -22,6 +22,40 @@ export interface AdminPolicy {
 
 export const MEMBER_ROLES = ['owner', 'admin', 'security', 'developer', 'analyst', 'viewer'] as const;
 
+/** Workspace + role for the /admin access gate. One query, resilient to transient hangs. */
+export interface GateMembership {
+  role: string;
+  organization: { id: string; name: string; slug: string } | null;
+}
+
+/**
+ * The caller's first active membership with its organization. Retries hung
+ * requests (aborted after 8s) up to 3 times before throwing.
+ */
+export async function getGateMembership(userId: string): Promise<GateMembership | null> {
+  const supabase = requireClient();
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const { data, error } = await supabase
+        .from('organization_members')
+        .select('role, organizations(id, name, slug)')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .abortSignal(AbortSignal.timeout(8000))
+        .maybeSingle();
+      if (error) throw error;
+      return (data ?? null) as GateMembership | null;
+    } catch (err) {
+      lastError = err;
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Could not reach the database.');
+}
+
 export interface MemberStats {
   /** Registered active members in the organization. */
   total: number;
