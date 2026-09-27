@@ -45,6 +45,8 @@ function toMockEvaluation(result: EvaluationResult): MockEvaluation {
     policy: result.policies_triggered[0] ?? 'Default policy',
     approvalRequired: result.approval_required ?? false,
     approvalRequestId: result.approval_request_id ?? null,
+    enforced: result.enforced ?? true,
+    wouldDecision: result.would_decision ?? null,
   };
 }
 

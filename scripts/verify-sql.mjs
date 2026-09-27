@@ -251,5 +251,79 @@ try {
 }
 expect(memberDenied, 'non-admin cannot decide approvals');
 
+// --- 015 enforcement mode tests ------------------------------------------------
+// Existing orgs keep ENFORCE after the migration (no silent downgrade).
+const keptMode = await db.query(`select enforcement_mode from public.organizations where id = '${ORG}'`);
+expect(keptMode.rows[0].enforcement_mode === 'enforce', 'existing org keeps enforce mode after 015');
+
+// New orgs default to MONITOR.
+await db.exec(
+  `insert into public.organizations (id, name, slug) values ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 'Monitor Co', 'monitor-co')`
+);
+const newMode = await db.query(
+  `select enforcement_mode from public.organizations where id = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'`
+);
+expect(newMode.rows[0].enforcement_mode === 'monitor', 'new org defaults to monitor');
+
+// In monitor mode the same request is allowed but records the would-be block.
+await db.exec(`update public.organizations set enforcement_mode = 'monitor' where id = '${ORG}'`);
+const monitored = await db.query(
+  `select public.evaluate_ai_request('${ORG}','${CLAUDE}','Customer Analysis',array['${CUSTOMERS}'::uuid]) as result`
+);
+const mon = monitored.rows[0].result;
+expect(
+  mon.decision === 'allow' && mon.enforced === false &&
+    mon.would_decision === 'block' && mon.enforcement_mode === 'monitor',
+  'monitor mode allows but records would-block'
+);
+
+// Audit log records the would-be decision.
+const monAudit = await db.query(
+  `select action, metadata from public.audit_logs where resource_id = '${mon.request_id}'::uuid`
+);
+expect(
+  monAudit.rows[0].action === 'ai_request_allow' &&
+    monAudit.rows[0].metadata.would_decision === 'block' &&
+    monAudit.rows[0].metadata.enforced === false,
+  'audit log records would-block in monitor mode'
+);
+
+// A risk event is still raised — that visibility is the point of monitoring.
+const monRisk = await db.query(
+  `select title, metadata from public.risk_events where ai_request_id = '${mon.request_id}'::uuid`
+);
+expect(
+  monRisk.rows.length === 1 && /monitor mode/.test(monRisk.rows[0].title),
+  'risk event raised in monitor mode'
+);
+
+// The request row is stored as allowed with enforcement metadata.
+const monReq = await db.query(
+  `select status, metadata from public.ai_requests where id = '${mon.request_id}'::uuid`
+);
+expect(
+  monReq.rows[0].status === 'allowed' && monReq.rows[0].metadata.would_decision === 'block',
+  'request stored as allowed with would-block metadata'
+);
+
+// Invalid modes are rejected by the check constraint.
+let invalidRejected = false;
+try {
+  await db.exec(`update public.organizations set enforcement_mode = 'bogus' where id = '${ORG}'`);
+} catch {
+  invalidRejected = true;
+}
+expect(invalidRejected, 'invalid enforcement_mode rejected');
+
+// Back to enforce: the same request blocks again.
+await db.exec(`update public.organizations set enforcement_mode = 'enforce' where id = '${ORG}'`);
+const blockedAgain = await db.query(
+  `select public.evaluate_ai_request('${ORG}','${CLAUDE}','Customer Analysis',array['${CUSTOMERS}'::uuid]) as result`
+);
+expect(
+  blockedAgain.rows[0].result.decision === 'block' && blockedAgain.rows[0].result.enforced === true,
+  'enforce mode blocks again'
+);
+
 await db.close();
 console.log('SQL verification passed.');

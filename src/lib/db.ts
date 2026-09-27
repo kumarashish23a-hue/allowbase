@@ -6,6 +6,8 @@ export interface OrganizationRow {
   slug: string;
   plan: string;
   status: string;
+  /** monitor: detect and log only. enforce: policy decisions are applied. */
+  enforcement_mode: 'monitor' | 'enforce';
   settings: Record<string, unknown>;
   created_at: string;
   updated_at: string;
@@ -170,4 +172,9 @@ export interface EvaluationResult {
   approval_required: boolean;
   approval_request_id: string | null;
   detections?: DetectionFinding[];
+  /** False when the workspace is in monitor mode and the decision was not enforced. */
+  enforced?: boolean;
+  /** The decision that would have applied in enforce mode (monitor mode only). */
+  would_decision?: 'allow' | 'block' | 'review' | null;
+  enforcement_mode?: 'monitor' | 'enforce';
 }

@@ -27,7 +27,7 @@ import {
   type AdminPolicy,
   type MemberStats,
 } from '../services/adminService';
-import { getMyOrganizations } from '../services/organizationService';
+import { getMyOrganizations, setEnforcementMode } from '../services/organizationService';
 import type { Decision } from '../types';
 
 const tabs = [
@@ -420,6 +420,43 @@ export function Admin() {
                           <p className="text-xs text-mist-500">
                             {org.plan} · {org.id === activeOrgId ? 'active' : ''}
                           </p>
+                          <div
+                            className="mt-2 inline-flex rounded-lg border border-line p-0.5"
+                            role="group"
+                            aria-label={`Security mode for ${org.name}`}
+                          >
+                            {(['monitor', 'enforce'] as const).map((m) => {
+                              const selected = (org.enforcement_mode ?? 'enforce') === m;
+                              return (
+                                <button
+                                  key={m}
+                                  type="button"
+                                  disabled={busy}
+                                  aria-pressed={selected}
+                                  onClick={() => {
+                                    if (!selected) {
+                                      void run(
+                                        () => setEnforcementMode(org.id, m),
+                                        `Security mode set to ${m}.`,
+                                      );
+                                    }
+                                  }}
+                                  className={`rounded-md px-2.5 py-1 text-[11px] font-semibold capitalize transition ${
+                                    selected
+                                      ? 'bg-accent-500 text-accent-ink'
+                                      : 'text-mist-400 hover:text-mist-100'
+                                  }`}
+                                  title={
+                                    m === 'monitor'
+                                      ? 'Detect and log only — nothing is blocked'
+                                      : 'Apply policy decisions — block and require approval'
+                                  }
+                                >
+                                  {m}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </>
                       )}
                     </div>

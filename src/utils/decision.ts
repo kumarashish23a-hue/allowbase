@@ -16,6 +16,10 @@ export interface MockEvaluation {
   /** True when a policy sent the request to human approval instead of deciding. */
   approvalRequired?: boolean;
   approvalRequestId?: string | null;
+  /** False in monitor mode: the request was allowed but the decision was not enforced. */
+  enforced?: boolean;
+  /** The decision that would have applied in enforce mode (monitor mode only). */
+  wouldDecision?: string | null;
 }
 
 const externalModels = ['gpt', 'claude', 'gemini', 'llama'];

@@ -227,6 +227,13 @@ export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
                 {pendingApproval ? 'PENDING APPROVAL' : result.decision === 'BLOCK' ? 'BLOCKED' : result.decision === 'REDACT' ? 'REDACTED' : 'ALLOWED'}
               </span>
               <p className="mt-3 text-sm text-mist-200">{result.reason}</p>
+              {result.enforced === false ? (
+                <p className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/5 px-3 py-2 text-xs text-amber-600">
+                  Monitor mode: allowed, but would have{' '}
+                  {result.wouldDecision === 'block' ? 'been blocked' : 'required review'}. Switch the
+                  workspace to Enforce in the admin panel to apply this decision.
+                </p>
+              ) : null}
               {pendingApproval ? (
                 <p className="mt-3 rounded-lg border border-accent-400/20 bg-accent-400/5 px-3 py-2 text-xs text-accent-600">
                   A policy requires human approval. An owner or admin can allow or reject it in the Approvals section.

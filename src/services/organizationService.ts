@@ -65,3 +65,32 @@ export async function getOrganizationMemberCount(orgId: string): Promise<number>
   if (error) throw new Error('Could not count members.');
   return count ?? 0;
 }
+
+/** Workspace enforcement mode. monitor = detect and log only; enforce = apply policy decisions. */
+export type EnforcementMode = 'monitor' | 'enforce';
+
+/** Read a workspace's enforcement mode. Defaults to monitor when unknown. */
+export async function getEnforcementMode(orgId: string): Promise<EnforcementMode> {
+  const supabase = getSupabase();
+  if (!supabase) return 'monitor';
+  const { data, error } = await supabase
+    .from('organizations')
+    .select('enforcement_mode')
+    .eq('id', orgId)
+    .maybeSingle();
+  if (error) throw new Error('Could not load the security mode.');
+  return (data?.enforcement_mode as EnforcementMode | undefined) ?? 'monitor';
+}
+
+/**
+ * Set a workspace's enforcement mode. Owner/admin only (enforced by RLS).
+ * Switching to monitor never deletes data; switching back to enforce
+ * immediately applies policy decisions again.
+ */
+export async function setEnforcementMode(orgId: string, mode: EnforcementMode): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase is not configured.');
+  if (mode !== 'monitor' && mode !== 'enforce') throw new Error('Invalid security mode.');
+  const { error } = await supabase.from('organizations').update({ enforcement_mode: mode }).eq('id', orgId);
+  if (error) throw new Error('Could not change the security mode.');
+}
