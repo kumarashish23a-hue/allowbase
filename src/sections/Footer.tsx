@@ -1,4 +1,3 @@
-import { ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const columns: { title: string; links: { label: string; href: string }[] }[] = [
@@ -44,9 +43,7 @@ export function Footer() {
         <div className="grid gap-10 lg:grid-cols-[1.2fr_2fr]">
           <div>
             <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-ink-800">
-                <ShieldCheck size={18} className="text-accent-600" />
-              </span>
+              <img src="/logo.png" alt="AllowBase logo" className="h-9 w-9 rounded-xl" />
               <span className="text-[13px] font-bold uppercase tracking-[0.18em] text-mist-100">
                 AllowBase
               </span>

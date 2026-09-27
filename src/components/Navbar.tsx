@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Menu, ShieldCheck, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { navItems } from '../data/mock';
 import { getSupabase, isSupabaseConfigured, clearOrgCache } from '../lib/supabase';
@@ -73,9 +73,7 @@ export function Navbar({ onSignIn, onProfile }: NavbarProps) {
     >
       <nav aria-label="Primary" className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link to="/" className="flex items-center gap-2.5" aria-label="AllowBase home">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-ink-800">
-            <ShieldCheck size={16} className="text-accent-600" />
-          </span>
+          <img src="/logo.png" alt="AllowBase logo" className="h-8 w-8 rounded-lg" />
           <span className="text-[12px] font-bold uppercase tracking-[0.16em] text-mist-100">
             AllowBase
           </span>
