@@ -11,6 +11,8 @@ export interface EvaluateInput {
   purpose: string;
   /** Optional AI agent name; the request is attributed to the agent and its data permissions are enforced. */
   agent?: string;
+  /** Optional free text to scan for secrets/PII (max 100k chars). Scanned in memory, never stored. */
+  content?: string;
 }
 
 const decisionMap: Record<EvaluationResult['decision'], MockEvaluation['decision']> = {
@@ -19,11 +21,27 @@ const decisionMap: Record<EvaluationResult['decision'], MockEvaluation['decision
   review: 'REDACT',
 };
 
+const categoryLabels: Record<string, string> = {
+  secret: 'Secret/password',
+  api_key: 'API key',
+  private_key: 'Private key',
+  credit_card: 'Credit card',
+  gov_id: 'Government ID',
+  email: 'Email address',
+  phone: 'Phone number',
+  jwt: 'Auth token',
+};
+
 function toMockEvaluation(result: EvaluationResult): MockEvaluation {
+  const detected = (result.detections ?? []).map((finding) => {
+    const label = categoryLabels[finding.category] ?? finding.category;
+    const count = finding.count > 1 ? ` ×${finding.count}` : '';
+    return `${label} (${finding.severity})${count}`;
+  });
   return {
     decision: decisionMap[result.decision],
     reason: result.reasons.join(' ') || 'Evaluated by the Data Control Plane policy engine.',
-    detected: [],
+    detected,
     policy: result.policies_triggered[0] ?? 'Default policy',
     approvalRequired: result.approval_required ?? false,
     approvalRequestId: result.approval_request_id ?? null,
@@ -97,6 +115,7 @@ export async function evaluateRequest(input: EvaluateInput): Promise<MockEvaluat
         purpose: input.purpose,
         data_asset_ids: [asset.id],
         agent_id: agentId,
+        ...(input.content?.trim() ? { content: input.content } : {}),
       },
     });
     if (error) {

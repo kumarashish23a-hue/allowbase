@@ -5,6 +5,7 @@ export interface MockRequestInput {
   ai: string;
   data: string;
   purpose: string;
+  content?: string;
 }
 
 export interface MockEvaluation {
@@ -31,7 +32,7 @@ export function isExternalAi(ai: string): boolean {
 }
 
 export function detectSensitive(input: MockRequestInput): string[] {
-  const haystack = `${input.data} ${input.purpose}`.toLowerCase();
+  const haystack = `${input.data} ${input.purpose} ${input.content ?? ''}`.toLowerCase();
   const found: string[] = [];
 
   if (includesAny(haystack, ['customer database', 'customer', 'pii', 'email', 'phone', 'customer id'])) {

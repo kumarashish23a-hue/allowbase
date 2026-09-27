@@ -17,12 +17,19 @@ const presets = [
   { label: 'Unpermitted agent', user: 'Alex Kim', ai: 'Claude', agent: 'Customer Support Agent', data: 'Customer Database', purpose: 'Customer Analysis' },
 ];
 
+const secretExample =
+  'Hi team, customer Ravi Sharma (ravi.sharma@gmail.com, +91 98765 43210) says his card 4111 1111 1111 1111 was charged twice. DB password is db_admin:Sup3r$ecret! and the deploy key is AKIAIOSFODNN7EXAMPLE. Please draft a reply.';
+
+const cleanExample =
+  'Hi team, a customer reports a double charge on their card ending 1111. Please draft a polite reply asking them to confirm the last 4 digits through our secure portal.';
+
 export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
   const [user, setUser] = useState('Alex Kim');
   const [ai, setAi] = useState('Claude');
   const [agent, setAgent] = useState('');
   const [data, setData] = useState('Customer Database');
   const [purpose, setPurpose] = useState('Customer Analysis');
+  const [content, setContent] = useState('');
   const [running, setRunning] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [result, setResult] = useState<MockEvaluation | null>(null);
@@ -40,6 +47,7 @@ export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
       setStepIndex(0);
       setResult(null);
       setError(null);
+      setContent('');
       clearTimers();
     }
     return clearTimers;
@@ -59,7 +67,7 @@ export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
           if (index === simulationSteps.length - 1) {
             timers.current.push(
               window.setTimeout(() => {
-                void evaluateRequest({ user, ai, agent, data, purpose })
+                void evaluateRequest({ user, ai, agent, data, purpose, content })
                   .then((evaluation) => {
                     setResult(evaluation);
                   })
@@ -143,6 +151,35 @@ export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
                 />
               </div>
             ))}
+            <div>
+              <label htmlFor="sim-content" className="text-xs font-semibold uppercase tracking-[0.16em] text-mist-500">
+                Content to scan (optional)
+              </label>
+              <textarea
+                id="sim-content"
+                value={content}
+                onChange={(event) => setContent(event.target.value)}
+                rows={4}
+                className="mt-2 w-full rounded-xl border border-line bg-ink-950/70 px-3 py-2.5 text-sm text-mist-100 placeholder:text-mist-600 focus:border-accent-400/60 focus:outline-none"
+                placeholder="Paste the text the AI would see — emails, chat logs, prompts…"
+              />
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setContent(secretExample); setResult(null); setError(null); }}
+                  className="rounded-full border border-line px-3 py-1.5 text-xs font-medium text-mist-300 transition hover:border-line-strong hover:text-mist-100"
+                >
+                  Fill with secrets
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setContent(cleanExample); setResult(null); setError(null); }}
+                  className="rounded-full border border-line px-3 py-1.5 text-xs font-medium text-mist-300 transition hover:border-line-strong hover:text-mist-100"
+                >
+                  Fill with clean text
+                </button>
+              </div>
+            </div>
           </div>
 
           <button
@@ -197,13 +234,17 @@ export function RequestSimulator({ open, onClose }: RequestSimulatorProps) {
               ) : null}
               <div className="mt-3">
                 <p className="text-xs uppercase tracking-[0.16em] text-mist-500">Detected</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {result.detected.map((item) => (
-                    <span key={item} className="rounded-full border border-line bg-ink-950/70 px-2.5 py-1 text-xs text-mist-300">
-                      {item}
-                    </span>
-                  ))}
-                </div>
+                {result.detected.length > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {result.detected.map((item) => (
+                      <span key={item} className="rounded-full border border-line bg-ink-950/70 px-2.5 py-1 text-xs text-mist-300">
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-mist-600">No secrets or PII found in the scanned content.</p>
+                )}
               </div>
               <p className="mt-3 text-xs text-mist-500">Policy: {result.policy}</p>
             </div>

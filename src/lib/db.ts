@@ -152,6 +152,14 @@ export interface AuditLogRow {
   created_at: string;
 }
 
+export interface DetectionFinding {
+  detector: string;
+  category: string;
+  severity: string;
+  confidence: number;
+  count: number;
+}
+
 export interface EvaluationResult {
   request_id: string;
   decision: 'allow' | 'block' | 'review';
@@ -161,4 +169,5 @@ export interface EvaluationResult {
   checks: Record<string, boolean>;
   approval_required: boolean;
   approval_request_id: string | null;
+  detections?: DetectionFinding[];
 }
