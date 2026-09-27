@@ -18,11 +18,10 @@ import {
   RefreshCw,
   ShieldCheck,
   Table,
-  Terminal,
 } from 'lucide-react';
 import { Modal } from './Modal';
 import { ProviderConnections } from './ProviderConnections';
-import { getActiveOrganizationId } from '../lib/supabase';
+import { getActiveOrganizationId, getSupabaseUrl } from '../lib/supabase';
 import {
   createOrganization,
   setEnforcementMode,
@@ -424,10 +423,9 @@ export function SetupModal({ open, onClose, onSignIn, onTrySimulator, blocking =
     );
   };
 
-  const renderFunctionRow = (fn: keyof SetupStatus['functions'], extraCommand?: string) => {
+  const renderFunctionRow = (fn: keyof SetupStatus['functions']) => {
     if (!status) return null;
     const deployed = status.functions[fn] === 'deployed';
-    const command = `npx supabase functions deploy ${fn}`;
     return (
       <li key={fn} className="rounded-xl border border-line bg-ink-950/70 px-3 py-2">
         <div className="flex items-center gap-2">
@@ -441,39 +439,45 @@ export function SetupModal({ open, onClose, onSignIn, onTrySimulator, blocking =
             {functionStatusLabel(status.functions[fn])}
           </span>
         </div>
-        {!deployed && (
-          <>
-            <button
-              type="button"
-              onClick={() => void handleCopyCommand(command)}
-              className="mt-2 flex w-full items-center justify-between gap-2 rounded-lg bg-ink-900 px-3 py-2 font-mono text-xs text-mist-300 transition hover:text-mist-100"
-            >
-              <span className="truncate">{command}</span>
-              {copiedCmd === command ? (
-                <Check size={14} className="shrink-0 text-mint-400" />
-              ) : (
-                <Copy size={14} className="shrink-0" />
-              )}
-            </button>
-            {extraCommand ? (
-              <button
-                type="button"
-                onClick={() => void handleCopyCommand(extraCommand)}
-                className="mt-2 flex w-full items-center justify-between gap-2 rounded-lg bg-ink-900 px-3 py-2 font-mono text-xs text-mist-300 transition hover:text-mist-100"
-              >
-                <span className="truncate">{extraCommand}</span>
-                {copiedCmd === extraCommand ? (
-                  <Check size={14} className="shrink-0 text-mint-400" />
-                ) : (
-                  <Copy size={14} className="shrink-0" />
-                )}
-              </button>
-            ) : null}
-          </>
-        )}
       </li>
     );
   };
+
+  /** Project ref (e.g. abc123) derived from the configured Supabase URL. */
+  const projectRef = (() => {
+    try {
+      const url = getSupabaseUrl();
+      if (!url) return null;
+      return new URL(url).hostname.split('.')[0] || null;
+    } catch {
+      return null;
+    }
+  })();
+
+  /** One numbered copy-paste step: label, explanation, and a copy button. */
+  const renderCopyStep = (n: number, title: string, hint: string, command: string) => (
+    <div key={command} className="rounded-xl border border-line bg-ink-950/70 p-3">
+      <p className="text-sm font-medium text-mist-200">
+        <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-accent-500/20 text-[11px] font-bold text-accent-400">
+          {n}
+        </span>
+        {title}
+      </p>
+      <p className="mt-1 text-xs text-mist-500">{hint}</p>
+      <button
+        type="button"
+        onClick={() => void handleCopyCommand(command)}
+        className="mt-2 flex w-full items-center justify-between gap-2 rounded-lg bg-ink-900 px-3 py-2 font-mono text-xs text-mist-300 transition hover:text-mist-100"
+      >
+        <span className="truncate">{command}</span>
+        {copiedCmd === command ? (
+          <Check size={14} className="shrink-0 text-mint-400" />
+        ) : (
+          <Copy size={14} className="shrink-0" />
+        )}
+      </button>
+    </div>
+  );
 
   const gatewayLive =
     !!status &&
@@ -490,29 +494,36 @@ export function SetupModal({ open, onClose, onSignIn, onTrySimulator, blocking =
         </p>
       );
     }
+    const deployAll = `npx supabase functions deploy ${EDGE_FUNCTION_NAME} && npx supabase functions deploy ${INGEST_FUNCTION_NAME} && npx supabase functions deploy ${PROVIDER_FUNCTION_NAME} && npx supabase functions deploy ${GATEWAY_FUNCTION_NAME}`;
     return (
       <>
         <p className="text-sm text-mist-400">
-          These run inside your Supabase project. From your{' '}
-          <span className="font-mono text-mist-200">dataplane</span> project folder, run:
+          These run inside your Supabase project. Open a terminal in your AllowBase project
+          folder (the cloned repo) and do these once, in order:
         </p>
+        <div className="mt-3 space-y-2">
+          {renderCopyStep(
+            1,
+            'Log in and link the project',
+            'Skip this if you already linked the Supabase CLI to this project.',
+            projectRef
+              ? `npx supabase login && npx supabase link --project-ref ${projectRef}`
+              : 'npx supabase login && npx supabase link --project-ref YOUR_PROJECT_REF',
+          )}
+          {renderCopyStep(
+            2,
+            'Set the encryption secret',
+            'The AI gateway uses this to encrypt provider keys. Run once.',
+            'npx supabase secrets set PROVIDER_ENCRYPTION_KEY=$(openssl rand -hex 32)',
+          )}
+          {renderCopyStep(3, 'Deploy all services', 'One command deploys everything AllowBase needs.', deployAll)}
+        </div>
+        <h4 className="mt-4 text-sm font-semibold text-mist-200">Status</h4>
         <ul className="mt-2 space-y-2">
           {renderFunctionRow(EDGE_FUNCTION_NAME)}
           {renderFunctionRow(INGEST_FUNCTION_NAME)}
-        </ul>
-        <h4 className="mt-4 text-sm font-semibold text-mist-200">
-          AI gateway <span className="font-normal text-mist-500">(optional)</span>
-        </h4>
-        <p className="mt-1 text-xs text-mist-500">
-          Needed only to connect provider keys and forward live AI calls. The gateway encrypts
-          keys with a server secret:
-        </p>
-        <ul className="mt-2 space-y-2">
           {renderFunctionRow(PROVIDER_FUNCTION_NAME)}
-          {renderFunctionRow(
-            GATEWAY_FUNCTION_NAME,
-            'supabase secrets set PROVIDER_ENCRYPTION_KEY=$(openssl rand -hex 32)',
-          )}
+          {renderFunctionRow(GATEWAY_FUNCTION_NAME)}
         </ul>
         {gatewayLive ? (
           <p className="mt-2 text-xs text-mint-400">AI gateway services are live.</p>
@@ -533,13 +544,9 @@ export function SetupModal({ open, onClose, onSignIn, onTrySimulator, blocking =
             rel="noreferrer"
             className="mt-2 inline-flex items-center gap-1.5 text-xs text-mist-500 transition hover:text-mist-300"
           >
-            <ExternalLink size={13} /> or deploy in the dashboard
+            <ExternalLink size={13} /> view deployed functions in the dashboard
           </a>
         )}
-        <p className="mt-2 flex items-start gap-1.5 text-xs text-mist-500">
-          <Terminal size={13} className="mt-0.5 shrink-0" />
-          Make sure the Supabase CLI is linked to this project first.
-        </p>
       </>
     );
   };
