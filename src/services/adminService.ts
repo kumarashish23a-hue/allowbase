@@ -22,6 +22,37 @@ export interface AdminPolicy {
 
 export const MEMBER_ROLES = ['owner', 'admin', 'security', 'developer', 'analyst', 'viewer'] as const;
 
+export interface MemberStats {
+  /** Registered active members in the organization. */
+  total: number;
+  /** Distinct users with audit-log activity in the last 24h. Null when unreadable. */
+  activeLast24h: number | null;
+}
+
+/** Member counts: total registered + recently active (audit-log based). */
+export async function getMemberStats(orgId: string): Promise<MemberStats> {
+  const supabase = requireClient();
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const [membersRes, auditRes] = await Promise.all([
+    supabase
+      .from('organization_members')
+      .select('id', { count: 'exact', head: true })
+      .eq('organization_id', orgId)
+      .eq('status', 'active'),
+    supabase
+      .from('audit_logs')
+      .select('actor_user_id')
+      .eq('organization_id', orgId)
+      .gte('created_at', since)
+      .not('actor_user_id', 'is', null),
+  ]);
+  if (membersRes.error) throw new Error('Could not load member stats.');
+  const activeLast24h = auditRes.error
+    ? null
+    : new Set((auditRes.data ?? []).map((row) => row.actor_user_id as string)).size;
+  return { total: membersRes.count ?? 0, activeLast24h };
+}
+
 function requireClient() {
   const supabase = getSupabase();
   if (!supabase) throw new Error('Supabase is not configured. Sign in to use the admin panel.');

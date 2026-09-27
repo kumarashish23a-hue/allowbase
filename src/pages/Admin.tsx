@@ -11,6 +11,7 @@ import {
   MEMBER_ROLES,
   addClient,
   deletePolicy,
+  getMemberStats,
   listAdminPolicies,
   listMembers,
   removeMember,
@@ -20,6 +21,7 @@ import {
   switchOrganization,
   type AdminMember,
   type AdminPolicy,
+  type MemberStats,
 } from '../services/adminService';
 import {
   getActiveOrganization,
@@ -71,6 +73,7 @@ export function Admin() {
   const [orgs, setOrgs] = useState<OrganizationRow[]>([]);
   const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
   const [members, setMembers] = useState<AdminMember[]>([]);
+  const [memberStats, setMemberStats] = useState<MemberStats | null>(null);
   const [policies, setPolicies] = useState<AdminPolicy[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [keys, setKeys] = useState<ApiKeyItem[]>([]);
@@ -101,6 +104,9 @@ export function Admin() {
     setPolicies(policyList);
     setAgents(agentList);
     setKeys(keyList);
+    getMemberStats(orgId)
+      .then(setMemberStats)
+      .catch(() => setMemberStats(null));
   }, []);
 
   useEffect(() => {
@@ -403,7 +409,19 @@ export function Admin() {
         {tab === 'members' ? (
           <div className={cardCls}>
             <h2 className="text-sm font-semibold text-mist-100">Members of {activeOrg?.name}</h2>
-            <div className="mt-4 space-y-3">
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:max-w-md">
+              <div className="rounded-xl border border-line bg-ink-900/70 px-4 py-3">
+                <p className="text-2xl font-bold text-mist-100">{memberStats?.total ?? '…'}</p>
+                <p className="mt-1 text-xs text-mist-500">Total logins (registered)</p>
+              </div>
+              <div className="rounded-xl border border-line bg-ink-900/70 px-4 py-3">
+                <p className="text-2xl font-bold text-mist-100">
+                  {memberStats ? (memberStats.activeLast24h ?? '—') : '…'}
+                </p>
+                <p className="mt-1 text-xs text-mist-500">Active in last 24 hours</p>
+              </div>
+            </div>
+            <div className="mt-6 space-y-3">
               {members.map((member) => (
                 <div
                   key={member.id}
