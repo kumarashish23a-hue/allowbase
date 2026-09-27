@@ -31,6 +31,8 @@ export function ProfileModal({ open, onClose, onOpenSetup }: ProfileModalProps) 
   const configured = isSupabaseConfigured();
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState('');
+  const [userId, setUserId] = useState('');
+  const [copiedId, setCopiedId] = useState(false);
   const [memberSince, setMemberSince] = useState('');
   const [fullName, setFullName] = useState('');
   const [jobTitle, setJobTitle] = useState('');
@@ -63,6 +65,7 @@ export function ProfileModal({ open, onClose, onOpenSetup }: ProfileModalProps) 
         return;
       }
       setEmail(user.email ?? '');
+      setUserId(user.id);
       setMemberSince(user.created_at ? new Date(user.created_at).toLocaleDateString() : '');
       const { data: profile } = await supabase
         .from('profiles')
@@ -217,6 +220,21 @@ export function ProfileModal({ open, onClose, onOpenSetup }: ProfileModalProps) 
               <p className="truncate text-base font-semibold text-mist-100">{fullName.trim() || email}</p>
               <p className="truncate text-sm text-mist-500">{email}</p>
               {memberSince ? <p className="mt-1 text-xs text-mist-600">Member since {memberSince}</p> : null}
+              {userId ? (
+                <button
+                  type="button"
+                  title="Copy user ID"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(userId).then(() => {
+                      setCopiedId(true);
+                      window.setTimeout(() => setCopiedId(false), 1500);
+                    });
+                  }}
+                  className="mt-1 block max-w-full truncate font-mono text-[11px] text-mist-600 hover:text-mist-300"
+                >
+                  ID: {userId} {copiedId ? '· copied' : ''}
+                </button>
+              ) : null}
             </div>
           </div>
 

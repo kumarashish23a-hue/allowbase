@@ -76,6 +76,30 @@ export async function setAgentStatus(id: string, status: 'active' | 'paused'): P
   if (error) throw new Error('Could not update the agent.');
 }
 
+/** Create an agent in the active organization. RLS: owner/admin/security/developer. */
+export async function createAgent(name: string, description?: string): Promise<void> {
+  const supabase = getSupabase();
+  const orgId = await getActiveOrganizationId();
+  if (!supabase || !orgId) throw new Error('Sign in to create an agent.');
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error('Agent name cannot be empty.');
+  const { error } = await supabase.from('ai_agents').insert({
+    organization_id: orgId,
+    name: trimmed,
+    description: description?.trim() || null,
+    status: 'active',
+  });
+  if (error) throw new Error('Could not create the agent.');
+}
+
+/** Permanently delete an agent (its data grants are removed too). RLS: owner/admin. */
+export async function deleteAgent(id: string): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const { error } = await supabase.from('ai_agents').delete().eq('id', id);
+  if (error) throw new Error('Could not delete the agent.');
+}
+
 /** agent_id -> data_asset_id[] of direct read grants, for the active organization. */
 export async function getAgentAssetGrants(): Promise<Record<string, string[]>> {
   const supabase = getSupabase();

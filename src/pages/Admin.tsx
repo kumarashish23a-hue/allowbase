@@ -2,14 +2,16 @@ import { Bot, Building2, KeyRound, Loader2, Pencil, Plus, ShieldAlert, Trash2, U
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getActiveOrganizationId, getLocalUserId, getSupabase, getSupabaseUrl, isSupabaseConfigured } from '../lib/supabase';
-import { listAgents, setAgentStatus } from '../services/aiAgentService';
-import { listApiKeys, revokeApiKey, type ApiKeyItem } from '../services/apiKeysService';
+import { createAgent, deleteAgent, listAgents, setAgentStatus } from '../services/aiAgentService';
+import { createApiKey, listApiKeys, revokeApiKey, type ApiKeyItem } from '../services/apiKeysService';
 import { createPolicy, type PolicyDraft } from '../services/policyService';
 import type { OrganizationRow } from '../lib/db';
 import type { Agent } from '../types';
 import {
   MEMBER_ROLES,
   addClient,
+  addMember,
+  deleteOrganization,
   deletePolicy,
   getGateMembership,
   getMemberStats,
@@ -66,6 +68,7 @@ export function Admin() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [gate, setGate] = useState<'loading' | 'denied' | 'allowed'>('loading');
   const [gateError, setGateError] = useState<string | null>(null);
+  const [gateRole, setGateRole] = useState<string | null>(null);
   const [connTest, setConnTest] = useState<string | null>(null);
   const gateStepRef = useRef('starting');
 
@@ -106,13 +109,27 @@ export function Admin() {
   const [newOrgName, setNewOrgName] = useState('');
   const [editingOrg, setEditingOrg] = useState<{ id: string; name: string } | null>(null);
   const [newPolicy, setNewPolicy] = useState({ name: '', description: '', effect: 'BLOCK' as Decision });
+  const [newAgent, setNewAgent] = useState({ name: '', description: '' });
+  const [newMemberId, setNewMemberId] = useState('');
+  const [newMemberRole, setNewMemberRole] = useState<string>('viewer');
+  const [newKeyName, setNewKeyName] = useState('');
+  const [createdKey, setCreatedKey] = useState<{ name: string; key: string } | null>(null);
+  const [copiedKey, setCopiedKey] = useState(false);
 
   const refresh = useCallback(async () => {
     const supabase = getSupabase();
     if (!supabase) return;
     const orgId = await getActiveOrganizationId();
-    if (!orgId) return;
     setActiveOrgId(orgId);
+    if (!orgId) {
+      setOrgs([]);
+      setMembers([]);
+      setPolicies([]);
+      setAgents([]);
+      setKeys([]);
+      setMemberStats(null);
+      return;
+    }
     const [orgList, memberList, policyList, agentList, keyList] = await Promise.all([
       getMyOrganizations(),
       listMembers(orgId),
@@ -181,6 +198,7 @@ export function Admin() {
           finish('denied', null);
           return;
         }
+        setGateRole(role);
         gateStepRef.current = 'done';
         finish('allowed', null);
         await refresh().catch((err: unknown) => {
@@ -212,6 +230,33 @@ export function Admin() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const handleCreateKey = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newKeyName.trim() || busy) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await createApiKey(newKeyName.trim(), null);
+      setCreatedKey({ name: newKeyName.trim(), key: result.key });
+      setNewKeyName('');
+      setCopiedKey(false);
+      await refresh();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not create the API key.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copyCreatedKey = () => {
+    if (!createdKey) return;
+    void navigator.clipboard.writeText(createdKey.key).then(() => {
+      setCopiedKey(true);
+      window.setTimeout(() => setCopiedKey(false), 1500);
+    });
   };
 
   if (!unlocked) {
@@ -401,6 +446,25 @@ export function Admin() {
                       >
                         <Pencil size={13} />
                       </button>
+                      {gateRole === 'owner' ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Delete client "${org.name}"? This permanently removes the workspace and everything in it.`,
+                              )
+                            ) {
+                              void run(() => deleteOrganization(org.id), 'Client deleted.');
+                            }
+                          }}
+                          className={`${btnGhost} inline-flex items-center gap-1.5 text-rose-400 hover:text-rose-300`}
+                          aria-label={`Delete ${org.name}`}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 ))}
@@ -441,8 +505,9 @@ export function Admin() {
         ) : null}
 
         {tab === 'members' ? (
-          <div className={cardCls}>
-            <h2 className="text-sm font-semibold text-mist-100">Members of {activeOrg?.name}</h2>
+          <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+            <div className={cardCls}>
+              <h2 className="text-sm font-semibold text-mist-100">Members of {activeOrg?.name}</h2>
             <div className="mt-4 grid grid-cols-2 gap-3 sm:max-w-md">
               <div className="rounded-xl border border-line bg-ink-900/70 px-4 py-3">
                 <p className="text-2xl font-bold text-mist-100">{memberStats?.total ?? '…'}</p>
@@ -511,6 +576,56 @@ export function Admin() {
                 </div>
               ))}
               {members.length === 0 ? <p className="text-sm text-mist-500">No members.</p> : null}
+            </div>
+            </div>
+            <div className={cardCls}>
+              <h2 className="text-sm font-semibold text-mist-100">Add member</h2>
+              <p className="mt-1 text-xs text-mist-500">
+                The person must already have an account — ask them to copy their user ID from
+                Account (top-right) and paste it here.
+              </p>
+              <form
+                className="mt-4 space-y-4"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!newMemberId.trim() || !activeOrgId) return;
+                  void run(
+                    () =>
+                      addMember(activeOrgId, newMemberId, newMemberRole).then(() => {
+                        setNewMemberId('');
+                        setNewMemberRole('viewer');
+                      }),
+                    'Member added.',
+                  );
+                }}
+              >
+                <Field label="User ID">
+                  <input
+                    value={newMemberId}
+                    onChange={(e) => setNewMemberId(e.target.value)}
+                    placeholder="e.g. 3f9a2c1d-…"
+                    className={`${inputCls} font-mono`}
+                  />
+                </Field>
+                <Field label="Role">
+                  <select
+                    value={newMemberRole}
+                    onChange={(e) => setNewMemberRole(e.target.value)}
+                    className={inputCls}
+                  >
+                    {MEMBER_ROLES.map((role) => (
+                      <option key={role} value={role}>
+                        {role}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <button type="submit" disabled={busy || !newMemberId.trim()} className={btnPrimary}>
+                  <span className="inline-flex items-center gap-2">
+                    <Plus size={14} /> Add member
+                  </span>
+                </button>
+              </form>
             </div>
           </div>
         ) : null}
@@ -637,82 +752,188 @@ export function Admin() {
         ) : null}
 
         {tab === 'agents' ? (
-          <div className={cardCls}>
-            <h2 className="text-sm font-semibold text-mist-100">AI agents</h2>
-            <p className="mt-1 text-xs text-mist-500">
-              Pause an agent to stop it from being evaluated, or resume it.
-            </p>
-            <div className="mt-4 space-y-3">
-              {agents.map((agent) => (
-                <div
-                  key={agent.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-ink-900/70 px-4 py-3"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-mist-100">{agent.name}</p>
-                    <p className="text-xs text-mist-500">{agent.status}</p>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() =>
-                      void run(
-                        () =>
-                          setAgentStatus(
-                            agent.id,
-                            agent.status === 'Active' ? 'paused' : 'active',
-                          ),
-                        agent.status === 'Active' ? 'Agent paused.' : 'Agent resumed.',
-                      )
-                    }
-                    className={btnGhost}
+          <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+            <div className={cardCls}>
+              <h2 className="text-sm font-semibold text-mist-100">AI agents</h2>
+              <p className="mt-1 text-xs text-mist-500">
+                Pause an agent to stop it from being evaluated, or resume it.
+              </p>
+              <div className="mt-4 space-y-3">
+                {agents.map((agent) => (
+                  <div
+                    key={agent.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-ink-900/70 px-4 py-3"
                   >
-                    {agent.status === 'Active' ? 'Pause' : 'Resume'}
-                  </button>
-                </div>
-              ))}
-              {agents.length === 0 ? <p className="text-sm text-mist-500">No agents yet.</p> : null}
+                    <div>
+                      <p className="text-sm font-medium text-mist-100">{agent.name}</p>
+                      <p className="text-xs text-mist-500">{agent.status}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          void run(
+                            () =>
+                              setAgentStatus(
+                                agent.id,
+                                agent.status === 'Active' ? 'paused' : 'active',
+                              ),
+                            agent.status === 'Active' ? 'Agent paused.' : 'Agent resumed.',
+                          )
+                        }
+                        className={btnGhost}
+                      >
+                        {agent.status === 'Active' ? 'Pause' : 'Resume'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => {
+                          if (window.confirm(`Delete agent "${agent.name}"?`)) {
+                            void run(() => deleteAgent(agent.id), 'Agent deleted.');
+                          }
+                        }}
+                        className={`${btnGhost} inline-flex items-center gap-1.5 text-rose-400 hover:text-rose-300`}
+                        aria-label={`Delete ${agent.name}`}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {agents.length === 0 ? <p className="text-sm text-mist-500">No agents yet.</p> : null}
+              </div>
+            </div>
+            <div className={cardCls}>
+              <h2 className="text-sm font-semibold text-mist-100">Add agent</h2>
+              <p className="mt-1 text-xs text-mist-500">
+                Creates an agent in {activeOrg?.name ?? 'the active client'}.
+              </p>
+              <form
+                className="mt-4 space-y-4"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!newAgent.name.trim()) return;
+                  void run(
+                    () =>
+                      createAgent(newAgent.name, newAgent.description).then(() =>
+                        setNewAgent({ name: '', description: '' }),
+                      ),
+                    'Agent created.',
+                  );
+                }}
+              >
+                <Field label="Name">
+                  <input
+                    value={newAgent.name}
+                    onChange={(e) => setNewAgent({ ...newAgent, name: e.target.value })}
+                    placeholder="Support copilot"
+                    className={inputCls}
+                  />
+                </Field>
+                <Field label="Description">
+                  <input
+                    value={newAgent.description}
+                    onChange={(e) => setNewAgent({ ...newAgent, description: e.target.value })}
+                    placeholder="What this agent does"
+                    className={inputCls}
+                  />
+                </Field>
+                <button type="submit" disabled={busy || !newAgent.name.trim()} className={btnPrimary}>
+                  <span className="inline-flex items-center gap-2">
+                    <Plus size={14} /> Add agent
+                  </span>
+                </button>
+              </form>
             </div>
           </div>
         ) : null}
 
         {tab === 'keys' ? (
-          <div className={cardCls}>
-            <h2 className="text-sm font-semibold text-mist-100">API keys</h2>
-            <p className="mt-1 text-xs text-mist-500">
-              Revoke a key to immediately stop API access. Create new keys in the console's API Keys
-              section.
-            </p>
-            <div className="mt-4 space-y-3">
-              {keys.map((key) => (
-                <div
-                  key={key.id}
-                  className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-ink-900/70 px-4 py-3"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-mist-100">{key.name}</p>
-                    <p className="text-xs text-mist-500">
-                      {key.revoked_at ? 'revoked' : 'active'} · created{' '}
-                      {new Date(key.created_at).toLocaleDateString()}
+          <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+            <div className={cardCls}>
+              <h2 className="text-sm font-semibold text-mist-100">API keys</h2>
+              <p className="mt-1 text-xs text-mist-500">
+                Revoke a key to immediately stop API access.
+              </p>
+              <div className="mt-4 space-y-3">
+                {keys.map((key) => (
+                  <div
+                    key={key.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-ink-900/70 px-4 py-3"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-mist-100">{key.name}</p>
+                      <p className="text-xs text-mist-500">
+                        {key.revoked_at ? 'revoked' : 'active'} · created{' '}
+                        {new Date(key.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    {!key.revoked_at ? (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => {
+                          if (window.confirm(`Revoke API key "${key.name}"?`)) {
+                            void run(() => revokeApiKey(key.id), 'API key revoked.');
+                          }
+                        }}
+                        className={`${btnGhost} inline-flex items-center gap-1.5 text-rose-400 hover:text-rose-300`}
+                      >
+                        <Trash2 size={13} /> Revoke
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+                {keys.length === 0 ? <p className="text-sm text-mist-500">No API keys yet.</p> : null}
+              </div>
+            </div>
+            <div className={cardCls}>
+              <h2 className="text-sm font-semibold text-mist-100">New API key</h2>
+              <p className="mt-1 text-xs text-mist-500">
+                The plaintext is shown once. Only a hash is stored.
+              </p>
+              {createdKey ? (
+                <div className="mt-4 space-y-4">
+                  <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-4">
+                    <p className="text-sm text-mist-200">
+                      Copy it now — it will never be shown again.
                     </p>
                   </div>
-                  {!key.revoked_at ? (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => {
-                        if (window.confirm(`Revoke API key "${key.name}"?`)) {
-                          void run(() => revokeApiKey(key.id), 'API key revoked.');
-                        }
-                      }}
-                      className={`${btnGhost} inline-flex items-center gap-1.5 text-rose-400 hover:text-rose-300`}
-                    >
-                      <Trash2 size={13} /> Revoke
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-ink-900/80 px-4 py-3">
+                    <code className="overflow-x-auto font-mono text-sm text-mist-100">
+                      {createdKey.key}
+                    </code>
+                    <button type="button" onClick={copyCreatedKey} className={btnGhost}>
+                      {copiedKey ? 'Copied' : 'Copy'}
                     </button>
-                  ) : null}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCreatedKey(null)}
+                    className={`${btnPrimary} w-full`}
+                  >
+                    I've stored it safely
+                  </button>
                 </div>
-              ))}
-              {keys.length === 0 ? <p className="text-sm text-mist-500">No API keys yet.</p> : null}
+              ) : (
+                <form className="mt-4 space-y-4" onSubmit={handleCreateKey}>
+                  <Field label="Key name">
+                    <input
+                      value={newKeyName}
+                      onChange={(e) => setNewKeyName(e.target.value)}
+                      placeholder="Backend ingest"
+                      className={inputCls}
+                    />
+                  </Field>
+                  <button type="submit" disabled={busy || !newKeyName.trim()} className={btnPrimary}>
+                    <span className="inline-flex items-center gap-2">
+                      <Plus size={14} /> New key
+                    </span>
+                  </button>
+                </form>
+              )}
             </div>
           </div>
         ) : null}

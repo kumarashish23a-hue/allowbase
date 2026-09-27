@@ -177,6 +177,36 @@ export async function addClient(name: string): Promise<string> {
   return id;
 }
 
+/**
+ * Permanently delete a client workspace and everything in it. RLS allows
+ * only owners. If it was the active client, switches to another workspace.
+ */
+export async function deleteOrganization(orgId: string): Promise<void> {
+  const supabase = requireClient();
+  const { error } = await supabase.from('organizations').delete().eq('id', orgId);
+  if (error) throw new Error('Could not delete the client. Only owners can delete a workspace.');
+  clearOrgCache();
+}
+
+/** Add a member to an organization by their user ID. RLS: owner/admin. */
+export async function addMember(orgId: string, userId: string, role: string): Promise<void> {
+  const supabase = requireClient();
+  const trimmed = userId.trim();
+  if (!trimmed) throw new Error('User ID cannot be empty.');
+  const { error } = await supabase.from('organization_members').insert({
+    organization_id: orgId,
+    user_id: trimmed,
+    role,
+    status: 'active',
+  });
+  if (error) {
+    if (/duplicate|unique/i.test(error.message)) {
+      throw new Error('That user is already a member.');
+    }
+    throw new Error('Could not add the member. Check the user ID and try again.');
+  }
+}
+
 /** Policies of the active organization with status, for admin management. */
 export async function listAdminPolicies(orgId: string): Promise<AdminPolicy[]> {
   const supabase = requireClient();
