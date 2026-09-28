@@ -205,6 +205,31 @@ const inputCls =
   'mt-2 w-full rounded-xl border border-line bg-ink-950/70 px-3 py-2.5 text-sm text-mist-100 focus:border-accent-400/60 focus:outline-none';
 const labelCls = 'text-xs font-semibold uppercase tracking-[0.16em] text-mist-500';
 
+/** Plain-English building blocks for simple mode. Same engine underneath. */
+const SIMPLE_LEVELS = [
+  { value: 'public', label: 'Public', hint: 'Anyone can see it' },
+  { value: 'internal', label: 'Internal', hint: 'Office-only' },
+  { value: 'confidential', label: 'Confidential', hint: 'Private' },
+  { value: 'restricted', label: 'Restricted', hint: 'Top secret' },
+];
+
+const SIMPLE_ACTIONS: { value: PolicyAction; label: string; desc: string }[] = [
+  { value: 'block', label: 'Stop it', desc: 'The AI never sees the data.' },
+  { value: 'require_approval', label: 'Ask me first', desc: 'Hold it until someone approves.' },
+  { value: 'mask', label: 'Hide secrets', desc: 'Cover emails, keys and secrets, then allow.' },
+];
+
+function simpleSummary(levels: string[], action: PolicyAction): string {
+  if (levels.length === 0) return '';
+  const what =
+    action === 'block'
+      ? 'stop it — the AI never sees it'
+      : action === 'require_approval'
+        ? 'hold it until someone approves'
+        : 'hide any secrets in it, then allow it';
+  return `If the data is ${levels.join(' or ')}, ${what}.`;
+}
+
 export function PolicyBuilderModal({ open, onClose, onCreate }: PolicyBuilderModalProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -213,6 +238,9 @@ export function PolicyBuilderModal({ open, onClose, onCreate }: PolicyBuilderMod
   const [priority, setPriority] = useState('10');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [simple, setSimple] = useState(true);
+  const [simpleLevels, setSimpleLevels] = useState<string[]>(['confidential', 'restricted']);
+  const [simpleAction, setSimpleAction] = useState<PolicyAction>('block');
 
   const updateRow = (index: number, patch: Partial<ConditionRow>) => {
     setRows((current) => current.map((row, i) => (i === index ? { ...row, ...patch } : row)));
@@ -242,9 +270,9 @@ export function PolicyBuilderModal({ open, onClose, onCreate }: PolicyBuilderMod
   const removeRow = (index: number) =>
     setRows((current) => (current.length > 1 ? current.filter((_, i) => i !== index) : current));
 
-  const validate = (): string | null => {
+  const validate = (checkRows: ConditionRow[]): string | null => {
     if (!name.trim()) return 'Give the policy a name.';
-    for (const row of rows) {
+    for (const row of checkRows) {
       const def = fieldDef(row.field);
       if (def.kind === 'multi') {
         const selected = Array.isArray(row.value) ? row.value : [];
@@ -259,7 +287,11 @@ export function PolicyBuilderModal({ open, onClose, onCreate }: PolicyBuilderMod
   };
 
   const save = async () => {
-    const problem = validate();
+    const effectiveRows: ConditionRow[] = simple
+      ? [{ field: 'data.classification', operator: 'in' as PolicyOperator, value: simpleLevels }]
+      : rows;
+    const effectiveAction: PolicyAction = simple ? simpleAction : action;
+    const problem = validate(effectiveRows);
     if (problem) {
       setError(problem);
       return;
@@ -270,9 +302,9 @@ export function PolicyBuilderModal({ open, onClose, onCreate }: PolicyBuilderMod
       const draft: PolicyDraft = {
         name: name.trim(),
         description: description.trim(),
-        action,
+        action: effectiveAction,
         priority: Math.floor(Number(priority)),
-        conditions: rows.map(
+        conditions: effectiveRows.map(
           (row): PolicyConditionDraft => ({
             field: row.field,
             operator: row.operator,
@@ -290,8 +322,9 @@ export function PolicyBuilderModal({ open, onClose, onCreate }: PolicyBuilderMod
   };
 
   const actionLabel = ACTIONS.find((a) => a.value === action)?.label ?? action;
-  const preview =
-    rows.length > 0
+  const preview = simple
+    ? simpleSummary(simpleLevels, simpleAction)
+    : rows.length > 0
       ? `IF ${rows.map(describeCondition).join(' AND ')} THEN ${actionLabel.toLowerCase()} (priority ${priority || '10'})`
       : '';
 
@@ -323,9 +356,90 @@ export function PolicyBuilderModal({ open, onClose, onCreate }: PolicyBuilderMod
           />
         </div>
 
-        <div>
-          <span className={labelCls}>If — all of these must match</span>
-          <div className="mt-2 space-y-3">
+        {simple ? (
+          <div className="space-y-4">
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <span className={labelCls}>When the data is…</span>
+                <button
+                  type="button"
+                  onClick={() => setSimple(false)}
+                  className="text-xs text-accent-600 transition hover:text-accent-500"
+                >
+                  Custom rule →
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {SIMPLE_LEVELS.map((level) => {
+                  const picked = simpleLevels.includes(level.value);
+                  return (
+                    <button
+                      key={level.value}
+                      type="button"
+                      onClick={() =>
+                        setSimpleLevels((current) =>
+                          picked
+                            ? current.filter((v) => v !== level.value)
+                            : [...current, level.value],
+                        )
+                      }
+                      aria-pressed={picked}
+                      title={level.hint}
+                      className={`rounded-xl border px-3.5 py-2 text-sm font-semibold transition ${
+                        picked
+                          ? 'border-accent-400/60 bg-accent-500/15 text-accent-600'
+                          : 'border-line text-mist-400 hover:text-mist-100'
+                      }`}
+                    >
+                      {level.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1 text-[11px] text-mist-600">
+                Tap to pick. Anything stamped with these gets guarded.
+              </p>
+            </div>
+
+            <div>
+              <span className={labelCls}>Then…</span>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                {SIMPLE_ACTIONS.map((a) => (
+                  <button
+                    key={a.value}
+                    type="button"
+                    onClick={() => setSimpleAction(a.value)}
+                    aria-pressed={simpleAction === a.value}
+                    title={a.desc}
+                    className={`rounded-xl border px-3 py-3 text-xs font-bold transition ${
+                      simpleAction === a.value
+                        ? 'border-accent-400/60 bg-accent-500/15 text-accent-600'
+                        : 'border-line text-mist-400 hover:text-mist-100'
+                    }`}
+                  >
+                    {a.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-[11px] text-mist-600">
+                {SIMPLE_ACTIONS.find((a) => a.value === simpleAction)?.desc}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <>
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <span className={labelCls}>If — all of these must match</span>
+              <button
+                type="button"
+                onClick={() => setSimple(true)}
+                className="text-xs text-accent-600 transition hover:text-accent-500"
+              >
+                ← Simple mode
+              </button>
+            </div>
+            <div className="mt-2 space-y-3">
             {rows.map((row, index) => {
               const def = fieldDef(row.field);
               const multi = def.kind === 'multi';
@@ -492,7 +606,9 @@ export function PolicyBuilderModal({ open, onClose, onCreate }: PolicyBuilderMod
           <p className="mt-1 text-[11px] text-mist-600">
             {ACTIONS.find((a) => a.value === action)?.desc}
           </p>
-        </div>
+          </div>
+          </>
+        )}
 
         <div>
           <label htmlFor="policy-priority" className={labelCls}>
