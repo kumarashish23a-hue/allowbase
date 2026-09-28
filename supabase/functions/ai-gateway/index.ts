@@ -33,6 +33,7 @@ import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
 import { detectSensitiveContent, maskSensitiveContent, hasCriticalFinding, DETECTOR_VERSION } from '../_shared/detect.ts';
+import { detectThreats, hasCriticalThreat, THREAT_DETECTOR_VERSION } from '../_shared/threat.ts';
 import { checkEndpointRateLimit, rateLimitedResponse } from '../_shared/rateLimit.ts';
 import { recordMetric, nowMs } from '../_shared/metrics.ts';
 import { decryptSecret } from '../_shared/providerCrypto.ts';
@@ -322,9 +323,11 @@ serve(async (req: Request): Promise<Response> => {
     );
   }
 
-  // 3. Scan the prompt for secrets/PII (in memory; raw content is never stored).
+  // 3. Scan the prompt for secrets/PII and for attack patterns (in memory;
+  //    raw content is never stored). Threat findings travel in the same
+  //    findings array so threat.category policy conditions can match them.
   const scanText = messages.map((m) => m.content).join('\n');
-  const detections = detectSensitiveContent(scanText);
+  const detections = [...detectSensitiveContent(scanText), ...detectThreats(scanText)];
 
   // 4. Register the model in the workspace if it is new (external, unapproved
   // by default — policies decide whether it may be used). Matched on the
@@ -485,14 +488,20 @@ serve(async (req: Request): Promise<Response> => {
     apiKey = '';
   }
 
-  // 7. Scan the provider's response for sensitive content (in memory; raw
-  //    response text is never stored) and mask it before returning it to the
-  //    caller. Only the first RESPONSE_SCAN_MAX_CHARS are scanned; masking
-  //    applies to the full response. Findings are recorded as counts by
-  //    category — never raw values.
-  const responseFindings = detectSensitiveContent(providerResult.text.slice(0, RESPONSE_SCAN_MAX_CHARS));
+  // 7. Scan the provider's response for sensitive content and attack patterns
+  //    (in memory; raw response text is never stored) and mask PII/secrets
+  //    before returning it to the caller. Threat-scanning the response
+  //    matters because indirect prompt injection and malicious instructions
+  //    can arrive via tool/RAG output the provider echoes back. Only the
+  //    first RESPONSE_SCAN_MAX_CHARS are scanned; masking applies to the
+  //    full response. Findings are recorded as counts by category — never
+  //    raw values.
+  const responseScanText = providerResult.text.slice(0, RESPONSE_SCAN_MAX_CHARS);
+  const responseContentFindings = detectSensitiveContent(responseScanText);
+  const responseThreatFindings = detectThreats(responseScanText);
+  const responseFindings = [...responseContentFindings, ...responseThreatFindings];
   const maskedResponse = maskSensitiveContent(providerResult.text);
-  const responseMaskedCritical = hasCriticalFinding(responseFindings);
+  const responseMaskedCritical = hasCriticalFinding(responseContentFindings);
 
   // Stamp the gateway call on the request row for the audit trail
   // (merged into the evaluation metadata, never replacing it).
@@ -518,10 +527,15 @@ serve(async (req: Request): Promise<Response> => {
             masked: evaluation.masked === true,
             response_scan: {
               detector: DETECTOR_VERSION,
-              // Counts by category only — raw matched values never leave detect.ts.
+              threat_detector: THREAT_DETECTOR_VERSION,
+              // Counts by category only — raw matched values never leave the detectors.
               counts_by_category: Object.fromEntries(responseFindings.map((f) => [f.category, f.count])),
               spans_masked: maskedResponse.maskedCount,
               response_masked: responseMaskedCritical,
+              // A critical threat in the response (e.g. destructive commands
+              // the model generated) is surfaced here; response-side blocking
+              // arrives with streaming inspection (Phase D).
+              threat_critical: hasCriticalThreat(responseThreatFindings),
             },
           },
         },

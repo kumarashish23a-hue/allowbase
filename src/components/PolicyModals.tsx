@@ -130,6 +130,14 @@ const FIELDS: FieldDef[] = [
     hint: 'What the scanner found in the request text.',
   },
   {
+    value: 'threat.category',
+    label: 'Threat detected',
+    kind: 'multi',
+    options: ['prompt_injection', 'jailbreak', 'system_prompt_extraction', 'exfiltration_attempt', 'malicious_instruction', 'suspicious_tool_call'],
+    operators: ['in', 'not_in', 'equals', 'not_equals'],
+    hint: 'Attack patterns found in the request text, e.g. prompt injection.',
+  },
+  {
     value: 'ai.is_external',
     label: 'AI is external',
     kind: 'boolean',

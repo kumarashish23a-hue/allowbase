@@ -46,6 +46,16 @@ const CONTENT_SYNONYMS: { value: string; pattern: RegExp; label: string }[] = [
   { value: 'secret', pattern: /\b(secrets?|passwords?|credentials?)\b/, label: 'secrets' },
 ];
 
+/** threat.category value → synonyms. */
+const THREAT_SYNONYMS: { value: string; pattern: RegExp; label: string }[] = [
+  { value: 'prompt_injection', pattern: /\b(prompt injections?|injection attacks?|instruction (override|hijack)s?)\b/, label: 'prompt injection' },
+  { value: 'jailbreak', pattern: /\b(jailbreaks?|jailbreaking|dan mode)\b/, label: 'jailbreaks' },
+  { value: 'system_prompt_extraction', pattern: /\b(system prompt extraction|prompt extraction|(reveal|steal) (my |the |our )?(system )?instructions?)\b/, label: 'system prompt extraction' },
+  { value: 'exfiltration_attempt', pattern: /\b(exfiltration|data exfiltration|data theft|leaking data)\b/, label: 'exfiltration attempts' },
+  { value: 'malicious_instruction', pattern: /\b(malicious instructions?|dangerous commands?|destructive commands?)\b/, label: 'malicious instructions' },
+  { value: 'suspicious_tool_call', pattern: /\b(suspicious tool calls?|tool abuse|malicious tool (calls?|use))\b/, label: 'suspicious tool calls' },
+];
+
 /** data.classification value → synonyms. */
 const CLASS_SYNONYMS: { value: string; pattern: RegExp; label: string }[] = [
   { value: 'public', pattern: /\bpublic\b/, label: 'public' },
@@ -118,6 +128,8 @@ export function parseRuleSentence(input: string): ParsedRule {
   // Collect matches per field, split by polarity.
   const contentPos = new Map<string, string>();
   const contentNeg = new Map<string, string>();
+  const threatPos = new Map<string, string>();
+  const threatNeg = new Map<string, string>();
   const classPos = new Map<string, string>();
   const classNeg = new Map<string, string>();
   const providerPos = new Map<string, string>();
@@ -129,6 +141,9 @@ export function parseRuleSentence(input: string): ParsedRule {
     const target = (m: Map<string, string>, n: Map<string, string>) => (clause.negated ? n : m);
     for (const s of CONTENT_SYNONYMS) {
       if (s.pattern.test(clause.text)) target(contentPos, contentNeg).set(s.value, s.label);
+    }
+    for (const s of THREAT_SYNONYMS) {
+      if (s.pattern.test(clause.text)) target(threatPos, threatNeg).set(s.value, s.label);
     }
     for (const s of CLASS_SYNONYMS) {
       if (s.pattern.test(clause.text)) target(classPos, classNeg).set(s.value, s.label);
@@ -177,6 +192,7 @@ export function parseRuleSentence(input: string): ParsedRule {
   };
 
   multi('content.category', contentPos, contentNeg, (l) => `finds ${joinLabels(l)}`);
+  multi('threat.category', threatPos, threatNeg, (l) => `threat: ${joinLabels(l)}`);
   multi('data.classification', classPos, classNeg, (l) => `data is ${joinLabels(l)}`);
   multi('ai.provider', providerPos, providerNeg, (l) => `AI is ${joinLabels(l)}`);
   if (sensitivity) {

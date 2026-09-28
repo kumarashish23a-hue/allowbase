@@ -1,0 +1,116 @@
+# Backend-First Build Plan — AllowBase
+
+Principle: **keep the frontend simple, make the backend the product.**
+The frontend configures, observes, manages, and approves. The backend detects,
+decides, transforms, enforces, and audits. All phases build inside the existing
+Supabase architecture (Postgres + Edge Functions/Deno) — no rewrites, no new
+backend stack (per §38 of the build brief: reuse working code).
+
+Status key: ✅ implemented · 🟡 partial · ❌ missing
+(Phase A shipped 2026-09-28: migration 025, `_shared/threat.ts`, gateway +
+evaluate wiring, policy-builder keywords, `scripts/verify-threat.mjs` — 44
+assertions green, tsc + build clean, no regressions.)
+
+## Where we stand (audit 2026-09-28, main @ ac08773)
+
+✅ Foundation (auth, orgs, roles, RLS, request IDs)
+✅ Policy engine (versions, rollback, monitor/enforce, most-restrictive-wins, explainability)
+✅ AI gateway (auth → rate limit → decrypt → scan → policy → mask → forward → scan response → audit)
+✅ Approvals (queue, approve/reject) · ✅ Audit (append-only, no raw secrets)
+✅ Rate limiting · ✅ Machine auth (023/024, gateway scope)
+🟡 Detection (regex-only) · 🟡 Classification (4 levels, no highly_restricted)
+🟡 Risk (single scalar) · 🟡 Transformation (mask/redact only) · 🟡 Output security (100KB cap, non-streaming)
+🟡 Agent model (static permissions) · 🟡 Observability (metrics, no tracing)
+❌ Threat detection · ❌ Tokenization vault · ❌ RAG security · ❌ MCP gateway
+
+Core milestone already works: PUBLIC→ALLOW, PII→MASK, API KEY→BLOCK, all server-side.
+
+---
+
+## Phase A — Threat detection ✅ SHIPPED 2026-09-28
+
+~~Entire attack class currently uncovered.~~ Now covered deterministically.
+
+**Build:**
+- `supabase/functions/_shared/threat.ts` — deterministic detector registry, `detectThreats(content)` → `{type, category, confidence, severity, detector:'threat-v1', matched_rule}`. Never stores raw secrets; stores matched rule IDs.
+- Categories: `prompt_injection` ("ignore previous instructions", instruction-override), `jailbreak` (DAN-style, roleplay-escape), `system_prompt_extraction` ("reveal your instructions"), `exfiltration_attempt` (sensitive data + outbound URL/webhook co-occurrence), `malicious_instruction` (`rm -rf`, `curl|sh`, etc.), `suspicious_tool_call`.
+- Wire into the evaluate pipeline (ai-gateway + evaluate-ai-request path): threat findings bump risk and feed policy.
+- Migration `025_threat_detection.sql`: new policy condition `threat.category` (any-match, like `content.category`); threat findings recorded in `detection_events` with `detector='threat-v1'`.
+- Policy builder: parser keywords ("prompt injection", "jailbreak", "exfiltration") → `threat.category` conditions. Frontend change is config-only.
+
+**Tests:** `scripts/verify-threat.mjs` (~30 assertions) — true positives per category, false-positive checks, end-to-end: high-severity threat + policy → BLOCK with reasons.
+
+**Done when:** 6 categories detected deterministically; a policy can block on `threat.category`; findings carry no raw content; tests green.
+
+## Phase B — Quick wins (one build, three holes closed)
+
+**B1 — Approval expiry** (the `expired` status is currently dead code):
+- Migration `026_approval_expiry.sql`: `approval_requests.expires_at timestamptz NOT NULL DEFAULT now() + interval '24 hours'`; SQL function `expire_stale_approvals()`; edge functions invoke it before honoring any approval (lazy expiry — no pg_cron dependency); expired approvals cannot be approved and the gateway treats them as denied.
+- Frontend: Approvals tab shows expiry timestamp (display only).
+
+**B2 — SSRF DNS pinning:**
+- `_shared/ssrf.ts`: resolve hostname → pin IP for the fetch; reject private/loopback/link-local ranges. Must verify `Deno.resolveDns` availability in the Supabase edge runtime during build; if unavailable, keep the current guard and keep the residual documented (honest, not silent).
+
+**B3 — Duplicate model registration:**
+- Migration: dedupe existing rows, then unique constraint on `(organization_id, provider, model)` of `ai_models`.
+
+**Tests:** extend existing verify scripts (expiry: approve-after-expiry fails; SSRF: private-IP hostnames rejected; models: concurrent double-register → one row).
+
+## Phase C — Tokenization vault ❌ → ✅
+
+Mask/redact are destructive-only; real PII workflows need reversible, auditable tokenization.
+
+**Build:**
+- Migration `027_token_vault.sql`: `privacy_tokens(id, organization_id, token_id, value_encrypted, purpose, created_by, created_at, expires_at, revoked_at)`. Token format `abt_tok_<random>`; values AES-GCM encrypted; lookup by `token_id`, never by value.
+- `supabase/functions/_shared/tokenize.ts`: `tokenize(text, findings, ctx)` replaces sensitive spans with token IDs; `detokenize(text, ctx)` resolves for the same org only, enforcing expiry/revocation; every resolve writes an audit row.
+- New policy action `tokenize` (priority unchanged: DENY > REQUIRE_APPROVAL > TRANSFORM > ALLOW). Flow: tokenize outbound to the AI provider; detokenize inbound for the authorized org actor.
+- Requires configuration: `TOKEN_ENCRYPTION_KEY` secret (documented; setup wizard probes it like `PROVIDER_ENCRYPTION_KEY`).
+
+**Tests:** `scripts/verify-tokenize.mjs` — round-trip, expiry enforced, revocation enforced, cross-org resolve denied + audited, key rotation documented.
+
+## Phase D — Streaming output inspection 🟡 → ✅ (hardest phase)
+
+Current output scan caps at 100KB, non-streaming — an exfiltration window on long responses.
+
+**Build:**
+- Gateway streaming path: for SSE/chunked provider responses, scan incrementally with an overlap buffer (~2KB) to catch patterns split across chunk boundaries; on critical finding → terminate stream + security event + audit; on high → redact the chunk.
+- Start with OpenAI SSE behind the existing provider abstraction; other providers follow the same interface.
+- Honest limit: chunked scanning is not perfect against adversarial chunk splits; the overlap buffer mitigates, documented as residual.
+
+**Tests:** simulated chunked stream with secrets split mid-token across chunks; termination + audit verified.
+
+## Phase E — RAG security ❌ → ✅
+
+**Build:**
+- Migration `028_rag_security.sql`: `documents`, `document_chunks` (pgvector embedding + `classification`, `owner_acl`, `organization_id`), `retrieval_policies`.
+- Ingest API: document → detect → classify → chunk → embed → store with classification + ACL. Never retrieve on semantic similarity alone.
+- Retrieval API: query → embed → similarity search **filtered by** `(org_id, requester clearance ≥ chunk classification, explicit grants)` → policy check → context to LLM.
+- Requires configuration: embedding provider/model (documented; pgvector extension on Supabase).
+
+## Phase F — MCP gateway ❌ → ✅
+
+**Build:**
+- Migration `029_mcp_security.sql`: `mcp_servers`, `mcp_tools`, `mcp_tool_calls`.
+- New edge function `mcp-gateway`: auth → tool identification → argument inspection (`detect.ts`) → threat check → policy → ALLOW / TRANSFORM / APPROVAL / BLOCK → execute → output inspection.
+- Dangerous operations (`delete`, `drop`, `export`, `transfer`, `execute`) default to `require_approval`.
+
+## Phase G — Agent guardrails 🟡 → ✅
+
+**Build:**
+- Migration `030_agent_guardrails.sql`: extend `ai_agents` (`max_tool_calls_per_window`, `max_data_volume_bytes`, `allowed_tools`, `blocked_tools`, `approval_required_for`); new `agent_tool_calls` log.
+- `supabase/functions/_shared/agentGuard.ts`: loop detection (N identical calls), call/volume caps, privilege-escalation signals; enforced in gateway paths; violations → BLOCK + security event.
+
+---
+
+## Cross-cutting rules (every phase)
+
+- Each phase: migration + code + verify script + docs update + commit + push. Frontend changes are observe/configure-only (new event types render, new policy keywords); **no security logic in the frontend, ever.**
+- Performance: deterministic → local rules → ML/embeddings → external LLM last. No external LLM per security decision.
+- Fail-safe: restricted data + engine failure = BLOCK, never silent allow.
+- Per-phase report in the §41 format: IMPLEMENTED / PRESERVED / PARTIAL / MOCKED / NOT IMPLEMENTED / REQUIRES CONFIGURATION / SECURITY RISKS / TEST RESULTS. Never claim production-ready without verification.
+- Explicitly out of scope: standalone Node backend (Supabase stays), ML-based detection (deterministic first), microservice split (modular monolith holds).
+
+## Order and rationale
+
+A → B → C → D → E → F → G.
+Threat detection first (uncovered attack class), then cheap hole-closes, then the vault (real PII workflows need it), then streaming (hard), then new surfaces in dependency order (RAG feeds agents; agents use MCP).

@@ -12,7 +12,8 @@
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
-import { detectSensitiveContent, maskSensitiveContent } from '../_shared/detect.ts';
+import { detectSensitiveContent, maskSensitiveContent, type ContentFinding } from '../_shared/detect.ts';
+import { detectThreats, type ThreatFinding } from '../_shared/threat.ts';
 import { checkEndpointRateLimit, rateLimitedResponse } from '../_shared/rateLimit.ts';
 import { recordMetric, nowMs } from '../_shared/metrics.ts';
 
@@ -131,14 +132,16 @@ serve(async (req: Request): Promise<Response> => {
   const allowedTypes = ['chat', 'completion', 'agent_action', 'data_access', 'tool_call'];
   if (!allowedTypes.includes(request_type)) return badRequest('Invalid request_type.');
 
-  // Optional free-text content: scanned in-memory, never stored or logged.
-  let detections: ReturnType<typeof detectSensitiveContent> = [];
+  // Optional free-text content: scanned in-memory for PII/secrets and attack
+  // patterns (never stored or logged). Threat findings travel in the same
+  // array so threat.category policy conditions can match them.
+  let detections: Array<ContentFinding | ThreatFinding> = [];
   if (body.content !== undefined && body.content !== null) {
     if (typeof body.content !== 'string') return badRequest('content must be a string when provided.');
     if (body.content.length > MAX_CONTENT_LENGTH) {
       return badRequest(`content must be at most ${MAX_CONTENT_LENGTH} characters.`);
     }
-    detections = detectSensitiveContent(body.content);
+    detections = [...detectSensitiveContent(body.content), ...detectThreats(body.content)];
   }
 
   // Rate limit per organization, scoped by the organization_id in the payload.
