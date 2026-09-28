@@ -105,7 +105,15 @@ Current output scan caps at 100KB, non-streaming — an exfiltration window on l
 
 **Tests:** simulated chunked stream with secrets split mid-token across chunks; termination + audit verified.
 
-## Phase E — RAG security ❌ → ✅
+## Phase E — RAG security ✅ SHIPPED 2026-09-28 (commit pending)
+
+Classified, ACL-governed retrieval over an org-owned corpus:
+
+- **Migration `028_rag_security.sql`**: `rag_documents` (title, classification, org ownership), `rag_chunks` (content, `real[]` embedding, embedding model), `rag_grants` (user or role grants). Classifications `public < internal < confidential < restricted`; role→clearance map (owner/admin/security=restricted, developer=confidential, analyst=internal, viewer=public). Single source of truth `rag_can_read_document()` — member AND classification ≤ clearance AND (public OR explicit grant); clearance is a ceiling, not a pass. Retrieval RPC `rag_search_candidates` filters by tenant/clearance/grants BEFORE similarity and caps the requested clearance at the role-derived maximum (direct RPC calls can't escalate). RLS on all three tables reuses the same helper; grants manageable by owner/admin/security only. Embeddings stored as `real[]` — no new Postgres extension required (pgvector is the documented scale path; the edge function does exact brute-force cosine over the filtered set).
+- **`_shared/rag.ts`** (`rag-v1`, zero-dep): deterministic chunking with overlap, cosine similarity (never NaN), `rankBySimilarity` (excludes missing/mismatched embeddings), clearance mirrors, OpenAI-compatible `embedTexts` (batched, ordered, status-only errors).
+- **Edge functions** (JWT-only in Phase E): `rag-ingest` (owner/admin/security/developer; validates → chunks → embeds via the org's configured provider connection, SSRF-checked → stores via RLS → audits counts only) and `rag-retrieve` (any member; embeds query → RPC-filtered candidates → cosine rank → top_k). `embedding_model` is REQUIRED on both — no silent default. Never retrieves on similarity alone: an unauthorized chunk cannot win regardless of similarity.
+- **Tests:** `scripts/verify-rag.mjs` — 59 assertions green (chunking invariants, similarity math, ranking hygiene, clearance mirrors, embedding batching + error hygiene, plus PGlite: clearance ceilings, grant-within-clearance, anti-escalation on direct RPC, tenant isolation, non-member rejection, RLS read/write enforcement).
+- **Honest residuals**: JWT-only (no machine-key scope yet); embeddings live as `real[]` with brute-force scan (fine for prototype corpora, pgvector later); chunk content returned by retrieval is ACL-controlled but not threat-scanned (gateway inspectors cover the AI path); no per-user clearance overrides (role-derived only). ❌ → ✅
 
 **Build:**
 - Migration `028_rag_security.sql`: `documents`, `document_chunks` (pgvector embedding + `classification`, `owner_acl`, `organization_id`), `retrieval_policies`.
