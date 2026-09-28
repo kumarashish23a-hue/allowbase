@@ -3,7 +3,6 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from
 import { Navbar } from './components/Navbar';
 import { Footer } from './sections/Footer';
 import { Home } from './pages/Home';
-import { Console } from './pages/Console';
 import { getActiveOrganization } from './services/organizationService';
 import { getSetupStatusSafe, setupConnectComplete } from './services/setupService';
 import { initForceLogoutWatch } from './lib/forceLogout';
@@ -15,6 +14,8 @@ const RequestSimulator = lazy(() =>
   import('./components/RequestSimulator').then((m) => ({ default: m.RequestSimulator })),
 );
 const Admin = lazy(() => import('./pages/Admin').then((m) => ({ default: m.Admin })));
+// The console pulls in recharts and every management panel; landing visitors never pay for it.
+const Console = lazy(() => import('./pages/Console').then((m) => ({ default: m.Console })));
 const SetupModal = lazy(() => import('./components/SetupModal').then((m) => ({ default: m.SetupModal })));
 const SignInModal = lazy(() => import('./components/SignInModal').then((m) => ({ default: m.SignInModal })));
 
@@ -97,12 +98,20 @@ function Shell() {
         </a>
         <Navbar onSignIn={() => setSignInOpen(true)} onProfile={() => setProfileOpen(true)} />
         <main id="main">
-          <Routes>
-            <Route path="/" element={<Home onDemo={openSimulator} />} />
-            <Route path="/app" element={<Console onSimulate={openSimulator} />} />
-            <Route path="/admin" element={<Admin />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          <Suspense
+            fallback={
+              <div className="flex min-h-[60vh] items-center justify-center pt-24">
+                <p className="text-sm text-mist-400">Loading…</p>
+              </div>
+            }
+          >
+            <Routes>
+              <Route path="/" element={<Home onDemo={openSimulator} />} />
+              <Route path="/app" element={<Console onSimulate={openSimulator} />} />
+              <Route path="/admin" element={<Admin />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
         </main>
         <Footer />
         <Suspense fallback={null}>

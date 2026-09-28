@@ -30,11 +30,27 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
 import { detectSensitiveContent } from '../_shared/detect.ts';
+import {
+  checkRateLimit,
+  clientIp,
+  rateLimitHeaders,
+  recordMetric,
+  type RateLimitResult,
+} from '../_shared/requestContext.ts';
+
+// Security layers, in order (cheapest first):
+//   1. Per-IP rate limit (INGEST_IP_RATE_LIMIT_PER_MINUTE, default 600) —
+//      slows key-guessing before any key lookup.
+//   2. authorize_api_key: validity, scopes (ingest; ingest:content when
+//      `content` is sent) and the key's CIDR allow-list.
+//   3. Per-key rate limit (the key's rate_limit_per_minute).
+//   4. ingest_api_event: idempotency + policy evaluation in one transaction.
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Expose-Headers': 'x-ratelimit-limit, x-ratelimit-remaining, x-ratelimit-reset, retry-after',
 };
 
 const UUID_RE =
@@ -55,10 +71,10 @@ interface IngestPayload {
 /** Max content size scanned for PII/secrets (DoS guard for the regex scan). */
 const MAX_CONTENT_LENGTH = 100_000;
 
-function json(status: number, body: Record<string, unknown>): Response {
+function json(status: number, body: Record<string, unknown>, extra: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders, 'Content-Type': 'application/json', ...extra },
   });
 }
 
@@ -84,6 +100,16 @@ serve(async (req: Request): Promise<Response> => {
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
   if (!supabaseUrl || !serviceKey) {
     return json(500, { error: 'Server misconfigured' });
+  }
+  const started = Date.now();
+  const supabase = createClient(supabaseUrl, serviceKey, {
+    auth: { persistSession: false },
+  });
+  const ip = clientIp(req);
+  const ipLimit = Math.max(1, Math.min(Number(Deno.env.get('INGEST_IP_RATE_LIMIT_PER_MINUTE') ?? 600) || 600, 100000));
+  const ipCheck = await checkRateLimit(supabase, `ingest-ip:${ip ?? 'unknown'}`, ipLimit, 60);
+  if (!ipCheck.allowed) {
+    return json(429, { error: 'Too many requests from this address.' }, rateLimitHeaders(ipCheck));
   }
 
   // 1. Authenticate: API key from x-api-key, or a Bearer token shaped like one.
@@ -176,17 +202,65 @@ serve(async (req: Request): Promise<Response> => {
     }
     content = body.content;
   }
-  const detections = content ? detectSensitiveContent(content) : [];
-
-  // 3. Delegate to the database: key auth, idempotency, and evaluation all
-  //    happen inside a single transaction in ingest_api_event.
-  const supabase = createClient(supabaseUrl, serviceKey, {
-    auth: { persistSession: false },
-  });
-
   if (!HEX64_RE.test(keyHash)) {
     return json(500, { error: 'Server misconfigured' });
   }
+
+  // 3. Authorize the key: validity, scopes, IP allow-list.
+  const requiredScopes = content ? ['ingest', 'ingest:content'] : ['ingest'];
+  const { data: authz, error: authzError } = await supabase.rpc('authorize_api_key', {
+    p_key_hash: keyHash,
+    p_client_ip: ip,
+    p_required_scopes: requiredScopes,
+  });
+  if (authzError) {
+    console.error('authorize_api_key failed:', authzError.message);
+    return json(500, { error: 'Authorization failed' });
+  }
+  const auth = authz as {
+    ok: boolean;
+    reason?: 'invalid' | 'scope' | 'ip';
+    missing?: string[];
+    key_id?: string;
+    organization_id?: string;
+    rate_limit_per_minute?: number;
+  };
+  if (!auth.ok) {
+    if (auth.reason === 'scope') {
+      return json(403, { error: `API key is missing required scope(s): ${(auth.missing ?? []).join(', ')}.` });
+    }
+    if (auth.reason === 'ip') {
+      return json(403, { error: 'Requests from this IP address are not allowed for this API key.' });
+    }
+    return json(401, { error: 'Invalid API key' });
+  }
+  const organizationId = auth.organization_id as string;
+
+  // 4. Per-key rate limit.
+  const keyLimit: RateLimitResult = await checkRateLimit(
+    supabase,
+    `key:${auth.key_id}`,
+    auth.rate_limit_per_minute ?? 120,
+    60,
+  );
+  const limitHeaders = rateLimitHeaders(keyLimit);
+  if (!keyLimit.allowed) {
+    await recordMetric(supabase, {
+      organization_id: organizationId,
+      source: 'ingest',
+      model: modelName,
+      outcome: 'rate_limited',
+      status_code: 429,
+      latency_ms: Date.now() - started,
+      error_code: 'rate_limited',
+    });
+    return json(429, { error: 'Rate limit exceeded for this API key.' }, limitHeaders);
+  }
+
+  const detections = content ? detectSensitiveContent(content) : [];
+
+  // 5. Delegate to the database: idempotency and evaluation happen inside a
+  //    single transaction in ingest_api_event (which re-validates the key).
 
   const { data, error } = await supabase.rpc('ingest_api_event', {
     p_key_hash: keyHash,
@@ -213,11 +287,35 @@ serve(async (req: Request): Promise<Response> => {
         message,
       )
     ) {
-      return json(400, { error: message });
+      return json(400, { error: message }, limitHeaders);
     }
     console.error('ingest_api_event failed:', message);
-    return json(500, { error: 'Evaluation failed' });
+    await recordMetric(supabase, {
+      organization_id: organizationId,
+      source: 'ingest',
+      model: modelName,
+      outcome: 'error',
+      status_code: 500,
+      latency_ms: Date.now() - started,
+      error_code: 'evaluation_failed',
+    });
+    return json(500, { error: 'Evaluation failed' }, limitHeaders);
   }
 
-  return json(200, data as Record<string, unknown>);
+  const verdict = data as Record<string, unknown>;
+  // Idempotent replays are not new traffic; don't double-count them.
+  if (verdict.idempotent_replay !== true) {
+    const decision = String(verdict.decision ?? '');
+    await recordMetric(supabase, {
+      organization_id: organizationId,
+      ai_request_id: typeof verdict.request_id === 'string' ? verdict.request_id : null,
+      source: 'ingest',
+      model: modelName,
+      outcome: decision === 'allow' ? 'allowed' : decision === 'block' ? 'blocked' : 'review',
+      status_code: 200,
+      latency_ms: Date.now() - started,
+    });
+  }
+
+  return json(200, verdict, limitHeaders);
 });

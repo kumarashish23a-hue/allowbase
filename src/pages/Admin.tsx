@@ -221,7 +221,13 @@ export function Admin() {
     setError(null);
     setNotice(null);
     try {
-      const result = await createApiKey(newKeyName.trim(), null);
+      const result = await createApiKey({
+        name: newKeyName.trim(),
+        expiresAt: null,
+        scopes: ['ingest', 'ingest:content'],
+        allowedCidrs: [],
+        rateLimitPerMinute: 120,
+      });
       setCreatedKey({ name: newKeyName.trim(), key: result.key });
       setNewKeyName('');
       setCopiedKey(false);

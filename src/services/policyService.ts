@@ -135,6 +135,52 @@ export async function setPolicyStatus(policyId: string, status: 'active' | 'paus
   if (error) throw new Error('Could not update the policy. Only owners, admins, or security can do this.');
 }
 
+export interface PolicyVersion {
+  id: string;
+  policy_id: string;
+  version: number;
+  change_type: 'created' | 'updated' | 'status_changed' | 'deleted' | 'rolled_back';
+  name: string;
+  description: string | null;
+  status: string;
+  priority: number;
+  rule: { conditions?: { field: string; operator: string; value: unknown }[] };
+  action: string;
+  rolled_back_from: number | null;
+  changed_by: string | null;
+  created_at: string;
+}
+
+/** Immutable version history for one policy, newest first. */
+export async function listPolicyVersions(policyId: string): Promise<PolicyVersion[]> {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('policy_versions')
+    .select('id,policy_id,version,change_type,name,description,status,priority,rule,action,rolled_back_from,changed_by,created_at')
+    .eq('policy_id', policyId)
+    .order('version', { ascending: false })
+    .limit(100);
+  if (error) throw new Error('Could not load the policy history. Has migration 020 been applied?');
+  return (data ?? []) as PolicyVersion[];
+}
+
+/** Restore a policy to an earlier version. Recorded as a new version; history is never rewritten. */
+export async function rollbackPolicy(policyId: string, version: number): Promise<Policy> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const { error } = await supabase.rpc('rollback_policy', { p_policy_id: policyId, p_version: version });
+  if (error) {
+    if (/owner, admin, or security/i.test(error.message)) {
+      throw new Error('Only owners, admins, or security members can roll back policies.');
+    }
+    throw new Error(error.message || 'Could not roll back the policy.');
+  }
+  const { data, error: loadError } = await supabase.from('policies').select('*').eq('id', policyId).single();
+  if (loadError || !data) throw new Error('Rolled back, but could not reload the policy.');
+  return toPolicy(data as PolicyRow);
+}
+
 /** Permanently delete a policy. Cannot be undone. */
 export async function deletePolicy(policyId: string): Promise<void> {
   const supabase = getSupabase();

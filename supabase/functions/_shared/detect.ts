@@ -15,6 +15,8 @@ export type DetectionCategory =
   | 'phone'
   | 'credit_card'
   | 'gov_id'
+  | 'iban'
+  | 'ip_address'
   | 'api_key'
   | 'private_key'
   | 'jwt'
@@ -59,6 +61,21 @@ function luhnValid(digits: string): boolean {
     doubleDigit = !doubleDigit;
   }
   return sum % 10 === 0;
+}
+
+/** ISO 13616 mod-97 check; rejects random uppercase/digit runs that look like IBANs. */
+function ibanValid(iban: string): boolean {
+  if (iban.length < 15 || iban.length > 34) return false;
+  const rearranged = iban.slice(4) + iban.slice(0, 4);
+  let remainder = 0;
+  for (const ch of rearranged) {
+    const code = ch.charCodeAt(0);
+    const value = code >= 65 && code <= 90 ? String(code - 55) : ch;
+    for (const digit of value) {
+      remainder = (remainder * 10 + (digit.charCodeAt(0) - 48)) % 97;
+    }
+  }
+  return remainder === 1;
 }
 
 const RULES: DetectorRule[] = [
@@ -106,10 +123,51 @@ const RULES: DetectorRule[] = [
     pattern: /\b\d{3}-\d{2}-\d{4}\b/g,
   },
   {
+    category: 'iban',
+    severity: 'high',
+    confidence: 0.95,
+    pattern: /\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,4})?\b/g,
+    validate: (m) => ibanValid(m.replace(/ /g, '')),
+  },
+  {
+    category: 'ip_address',
+    severity: 'low',
+    confidence: 0.7,
+    pattern: /\b(?:\d{1,3}\.){3}\d{1,3}\b/g,
+    validate: (m, offset, input) => {
+      if (!m.split('.').every((octet) => Number(octet) <= 255 && !(octet.length > 1 && octet.startsWith('0')))) {
+        return false;
+      }
+      // Skip version strings (v1.2.3.4) and longer dotted runs (1.2.3.4.5).
+      const before = input.slice(Math.max(0, offset - 1), offset);
+      const after = input.slice(offset + m.length, offset + m.length + 2);
+      return !/[vV.]/.test(before) && !/^\.\d/.test(after);
+    },
+  },
+  {
     category: 'api_key',
     severity: 'critical',
     confidence: 1.0,
     pattern: /\bAKIA[0-9A-Z]{16}\b/g,
+  },
+  {
+    category: 'api_key',
+    severity: 'critical',
+    confidence: 0.98,
+    // OpenAI (sk-..., sk-proj-...) and Anthropic (sk-ant-...) keys.
+    pattern: /\bsk-(?:proj-|ant-(?:api\d{2}-)?)?[A-Za-z0-9_-]{20,}\b/g,
+  },
+  {
+    category: 'api_key',
+    severity: 'critical',
+    confidence: 0.98,
+    pattern: /\bxox[abposr]-[A-Za-z0-9-]{10,}\b/g,
+  },
+  {
+    category: 'api_key',
+    severity: 'critical',
+    confidence: 0.95,
+    pattern: /\bAIza[0-9A-Za-z_-]{35}\b/g,
   },
   {
     category: 'api_key',

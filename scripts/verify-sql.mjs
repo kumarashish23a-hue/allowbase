@@ -247,7 +247,7 @@ let memberDenied = false;
 try {
   await db.query(`select public.decide_approval('${appr2.rows[0].r.approval_request_id}'::uuid, 'approved')`);
 } catch (error) {
-  memberDenied = /only organization owners or admins/.test(error.message);
+  memberDenied = /only organization owners/.test(error.message);
 }
 expect(memberDenied, 'non-admin cannot decide approvals');
 

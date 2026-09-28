@@ -1,6 +1,7 @@
-import { FlaskConical, Pause, Play, Plus, Trash2 } from 'lucide-react';
+import { FlaskConical, History, Pause, Play, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { PolicyBuilderModal } from '../components/PolicyModals';
+import { PolicyHistoryModal } from '../components/PolicyHistoryModal';
 import { PolicyTestModal } from '../components/PolicyTestModal';
 import { Reveal } from '../components/Reveal';
 import { SectionHeading } from '../components/SectionHeading';
@@ -25,6 +26,7 @@ export function PolicyEngine() {
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [open, setOpen] = useState(false);
   const [testPolicy, setTestPolicy] = useState<Policy | null>(null);
+  const [historyPolicy, setHistoryPolicy] = useState<Policy | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [cardError, setCardError] = useState<string | null>(null);
 
@@ -145,6 +147,15 @@ export function PolicyEngine() {
                   </button>
                   <button
                     type="button"
+                    onClick={() => setHistoryPolicy(policy)}
+                    title="Version history and rollback"
+                    aria-label={`History for ${policy.name}`}
+                    className="inline-flex items-center gap-1 rounded-lg border border-line px-2 py-1.5 text-xs text-mist-400 transition hover:border-line-strong hover:text-mist-100"
+                  >
+                    <History size={12} /> History
+                  </button>
+                  <button
+                    type="button"
                     disabled={busyId === policy.id}
                     onClick={() => void handleToggleStatus(policy)}
                     title={policy.status === 'active' ? 'Pause this policy' : 'Resume this policy'}
@@ -191,6 +202,18 @@ export function PolicyEngine() {
         open={testPolicy !== null}
         policy={testPolicy}
         onClose={() => setTestPolicy(null)}
+      />
+      <PolicyHistoryModal
+        open={historyPolicy !== null}
+        policy={historyPolicy}
+        onClose={() => setHistoryPolicy(null)}
+        onRolledBack={(restored) =>
+          setPolicies((current) =>
+            current.some((p) => p.id === restored.id)
+              ? current.map((p) => (p.id === restored.id ? restored : p))
+              : [restored, ...current],
+          )
+        }
       />
     </section>
   );

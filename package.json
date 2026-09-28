@@ -7,6 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "test": "node scripts/verify-providers.mjs && node scripts/verify-hardening.mjs && node scripts/verify-sql.mjs",
+    "test:unit": "node scripts/verify-providers.mjs",
+    "test:db": "node scripts/verify-hardening.mjs && node scripts/verify-sql.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
