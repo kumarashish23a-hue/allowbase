@@ -544,6 +544,29 @@ serve(async (req: Request): Promise<Response> => {
   const data_asset_ids = (body.data_asset_ids as string[] | undefined) ?? [];
   const agent_id = (body.agent_id as string | null | undefined) ?? null;
 
+  // Phase G: a paused/disabled agent cannot act through the gateway. The SQL
+  // evaluator checks existence and data permissions; status is enforced here
+  // so the big evaluator function needs no signature change.
+  if (agent_id) {
+    const { data: agentRow } = await admin
+      .from('ai_agents')
+      .select('id,status')
+      .eq('id', agent_id)
+      .eq('organization_id', organization_id)
+      .maybeSingle();
+    if (!agentRow) {
+      meter('ok', 'agent_not_found');
+      return json({ error: 'AI agent not found in this organization.' }, 404);
+    }
+    if ((agentRow as { status: string }).status !== 'active') {
+      meter('ok', 'agent_not_active');
+      return json(
+        { error: `The AI agent is ${(agentRow as { status: string }).status} and cannot act through the gateway.` },
+        403,
+      );
+    }
+  }
+
   // Best-effort production metrics (fire-and-forget; never fails the request).
   // 4xx caller errors are recorded as 'ok' with an errorCode so error_rate
   // stays a true function-health signal; only 5xx counts as 'error'.

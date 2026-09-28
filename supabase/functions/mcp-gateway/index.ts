@@ -28,6 +28,14 @@
 // Tool results are returned to the caller but only a masked <=2KB preview is
 // stored. Audit rows carry decisions and finding counts, never raw argument
 // or output values.
+//
+// Phase G — agent guardrails: an optional agent_id on 'call' (and re-checked
+// on 'execute') runs the call through public.check_agent_guardrails first —
+// allowlist/blocklist, tool-risk vs agent-risk, per-agent approval lists,
+// hourly call/volume caps, and loop detection. Guardrail blocks are terminal
+// and anomaly-class violations (escalation signals, loops) create risk
+// events. Every guarded invocation is logged to agent_tool_calls with a
+// SHA-256 hash of the arguments (not the payload twice).
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
@@ -45,6 +53,13 @@ import {
 import { checkEndpointRateLimit, rateLimitedResponse } from '../_shared/rateLimit.ts';
 import { recordMetric, nowMs } from '../_shared/metrics.ts';
 import { isSafeProviderUrlAsync } from '../_shared/ssrf.ts';
+import {
+  hashArguments,
+  parseGuardVerdict,
+  guardForcesApproval,
+  AGENT_GUARD_VERSION,
+  type GuardVerdict,
+} from '../_shared/agentGuard.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -75,6 +90,9 @@ function validate(body: Record<string, unknown>): string | null {
     }
     if (body.arguments !== undefined && (typeof body.arguments !== 'object' || body.arguments === null || Array.isArray(body.arguments))) {
       return 'arguments must be a JSON object.';
+    }
+    if (body.agent_id !== undefined && body.agent_id !== null && (typeof body.agent_id !== 'string' || !UUID_RE.test(body.agent_id))) {
+      return 'agent_id must be a UUID or null.';
     }
   } else {
     if (typeof body.tool_call_id !== 'string' || !UUID_RE.test(body.tool_call_id)) {
@@ -188,8 +206,14 @@ serve(async (req: Request) => {
     }
   }
 
-  /** Execute one approved/allowed call against its MCP server. */
-  async function executeCall(call: McpToolCall, server: McpServer): Promise<Response> {
+  /** Execute one approved/allowed call against its MCP server.
+   *  agentCtx links this execution to a guarded agent invocation so the
+   *  result size lands on the right agent_tool_calls row. */
+  async function executeCall(
+    call: McpToolCall,
+    server: McpServer,
+    agentCtx?: { agentToolCallId: string },
+  ): Promise<Response> {
     if (!server.base_url) {
       await admin.from('mcp_tool_calls').update({ status: 'failed', error: 'Server has no base URL configured.' }).eq('id', call.id);
       meter('ok', 'no_base_url');
@@ -260,6 +284,15 @@ serve(async (req: Request) => {
     });
 
     meter('ok');
+    // Guarded agents: record the result size for hourly volume accounting.
+    if (agentCtx) {
+      try {
+        const resultBytes = new TextEncoder().encode(JSON.stringify(result)).length;
+        await admin.from('agent_tool_calls').update({ result_bytes: resultBytes }).eq('id', agentCtx.agentToolCallId);
+      } catch {
+        /* volume accounting is best-effort */
+      }
+    }
     return json({
       tool_call_id: call.id,
       status: 'succeeded',
@@ -269,6 +302,65 @@ serve(async (req: Request) => {
       result_masked: summary.masked,
       output_threat_critical: summary.threatCritical,
     });
+  }
+
+  // --- Phase G helpers -------------------------------------------------------
+  /** Log one guarded agent invocation. Returns the agent_tool_calls id. */
+  async function logAgentCall(
+    agentId: string,
+    toolCallId: string | null,
+    toolName: string,
+    argsHash: string,
+    argsBytes: number,
+    decision: 'allowed' | 'require_approval' | 'blocked',
+  ): Promise<string | null> {
+    try {
+      const { data } = await admin
+        .from('agent_tool_calls')
+        .insert({
+          organization_id,
+          agent_id: agentId,
+          mcp_tool_call_id: toolCallId,
+          tool_name: toolName,
+          arguments_hash: argsHash,
+          args_bytes: argsBytes,
+          decision,
+        })
+        .select('id')
+        .single();
+      return (data as { id: string } | null)?.id ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Run the agent guardrail check. Returns null when no agent is involved. */
+  async function checkAgentGuardrails(
+    agentId: string | null,
+    toolName: string,
+    risk: McpRiskLevel,
+    args: Record<string, unknown>,
+  ): Promise<{ verdict: GuardVerdict; argsHash: string; argsBytes: number } | null> {
+    if (!agentId) return null;
+    const argsHash = await hashArguments(args);
+    const argsBytes = new TextEncoder().encode(JSON.stringify(args)).length;
+    const { data, error } = await admin.rpc('check_agent_guardrails', {
+      p_organization_id: organization_id,
+      p_agent_id: agentId,
+      p_tool_name: toolName,
+      p_tool_risk: risk,
+      p_args_hash: argsHash,
+      p_args_bytes: argsBytes,
+    });
+    if (error) {
+      // Fail closed: an unenforceable guardrail denies the call.
+      return {
+        verdict: { decision: 'block', forceApproval: false, reasons: ['agent guardrail check failed'], escalation: false },
+        argsHash,
+        argsBytes,
+      };
+    }
+    return { verdict: parseGuardVerdict(data), argsHash, argsBytes };
   }
 
   // --- action: execute (resume a held-for-approval call) -----------------------
@@ -314,7 +406,46 @@ serve(async (req: Request) => {
       meter('ok', 'server_inactive');
       return json({ error: 'The MCP server is no longer active.' }, 400);
     }
-    return executeCall(c, server as McpServer);
+    // Phase G: re-check agent guardrails at execute time — limits and loop
+    // state may have changed while the approval was pending.
+    let agentCtx: { agentToolCallId: string } | undefined;
+    const { data: priorAgentCall } = await admin
+      .from('agent_tool_calls')
+      .select('id,agent_id,tool_name,arguments_hash,args_bytes')
+      .eq('mcp_tool_call_id', c.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (priorAgentCall) {
+      const pac = priorAgentCall as { id: string; agent_id: string; tool_name: string; arguments_hash: string; args_bytes: number };
+      const { data: guardData, error: guardError } = await admin.rpc('check_agent_guardrails', {
+        p_organization_id: organization_id,
+        p_agent_id: pac.agent_id,
+        p_tool_name: pac.tool_name,
+        p_tool_risk: c.risk_level,
+        p_args_hash: pac.arguments_hash,
+        p_args_bytes: pac.args_bytes,
+      });
+      let verdict = guardError
+        ? { decision: 'block' as const, forceApproval: false, reasons: ['agent guardrail check failed'], escalation: false }
+        : parseGuardVerdict(guardData);
+      if (verdict.decision === 'block') {
+        await logAgentCall(pac.agent_id, c.id, pac.tool_name, pac.arguments_hash, pac.args_bytes, 'blocked');
+        await audit(c.id, 'mcp_tool_blocked', 'blocked', {
+          tool_name: pac.tool_name,
+          agent_id: pac.agent_id,
+          reasons: verdict.reasons,
+          guardrail: AGENT_GUARD_VERSION,
+        });
+        meter('ok', 'agent_guardrail_block');
+        return json({ error: 'The tool call was blocked by agent guardrails.', reasons: verdict.reasons }, 403);
+      }
+      // No new row: this is the same logical call the approval was granted
+      // for — the call-time row already counts against hourly limits. The
+      // execution result size lands on that row.
+      agentCtx = { agentToolCallId: pac.id };
+    }
+    return executeCall(c, server as McpServer, agentCtx);
   }
 
   // --- action: call (new invocation) -------------------------------------------
@@ -352,10 +483,52 @@ serve(async (req: Request) => {
   // The declared level can only raise, never lower, the computed risk.
   const risk = classifyToolRisk(t.name, t.description, t.risk_level);
 
+  // Phase G: agent guardrails run before argument inspection — who/what is
+  // governed first, content second. A guardrail block is terminal.
+  const agentId = (body.agent_id as string | null | undefined) ?? null;
+  const guard = await checkAgentGuardrails(agentId, t.name, risk, args);
+  if (guard && guard.verdict.decision === 'block') {
+    const { data: guardBlockedCall } = await admin
+      .from('mcp_tool_calls')
+      .insert({
+        organization_id,
+        server_id: s.id,
+        tool_id: t.id,
+        tool_name: t.name,
+        arguments: args,
+        requested_by: user.id,
+        status: 'blocked',
+        risk_level: risk,
+        decision: 'blocked',
+        decision_reason: guard.verdict.reasons.join('; '),
+        finding_counts: {},
+      })
+      .select('id')
+      .single();
+    const guardBlockedId = (guardBlockedCall as { id: string } | null)?.id ?? null;
+    const agentLogId = await logAgentCall(agentId!, guardBlockedId, t.name, guard.argsHash, guard.argsBytes, 'blocked');
+    await audit(guardBlockedId, 'mcp_tool_blocked', 'blocked', {
+      tool_name: t.name,
+      risk_level: risk,
+      agent_id: agentId,
+      agent_tool_call_id: agentLogId,
+      reasons: guard.verdict.reasons,
+      guardrail: AGENT_GUARD_VERSION,
+    });
+    meter('ok', 'agent_guardrail_block');
+    return json({ error: 'The tool call was blocked by agent guardrails.', tool_call_id: guardBlockedId, reasons: guard.verdict.reasons }, 403);
+  }
+
   // 4+5. Inspect arguments, then decide: block | require_approval | allowed.
   const argInspection = inspectToolArguments(args);
   let decision: McpDecision = 'allowed';
   const reasons: string[] = [];
+  if (guard && guardForcesApproval(guard.verdict)) {
+    // Per-agent approval requirements upgrade an allowed call to held —
+    // they never downgrade a block or bypass argument inspection below.
+    decision = 'require_approval';
+    reasons.push(...guard.verdict.reasons);
+  }
   if (argInspection.decision === 'blocked') {
     decision = 'blocked';
     reasons.push(...argInspection.reasons);
@@ -392,10 +565,15 @@ serve(async (req: Request) => {
       .select('id')
       .single();
     const blockedId = (blockedCall as { id: string } | null)?.id ?? null;
+    const blockedAgentLogId = agentId && guard
+      ? await logAgentCall(agentId, blockedId, t.name, guard.argsHash, guard.argsBytes, 'blocked')
+      : null;
     await audit(blockedId, 'mcp_tool_blocked', 'blocked', {
       tool_name: t.name,
       risk_level: risk,
       reasons,
+      agent_id: agentId,
+      agent_tool_call_id: blockedAgentLogId,
       finding_counts: findingCounts,
     });
     meter('ok', 'blocked');
@@ -443,10 +621,15 @@ serve(async (req: Request) => {
       return json({ error: 'Could not open the approval request.' }, 500);
     }
     await admin.from('mcp_tool_calls').update({ approval_id: (approval as { id: string }).id }).eq('id', heldId);
+    const heldAgentLogId = agentId && guard
+      ? await logAgentCall(agentId, heldId, t.name, guard.argsHash, guard.argsBytes, 'require_approval')
+      : null;
     await audit(heldId, 'mcp_tool_held', 'pending_approval', {
       tool_name: t.name,
       risk_level: risk,
       reasons,
+      agent_id: agentId,
+      agent_tool_call_id: heldAgentLogId,
       approval_id: (approval as { id: string }).id,
       finding_counts: findingCounts,
     });
@@ -489,7 +672,15 @@ serve(async (req: Request) => {
   await audit((newCall as { id: string }).id, 'mcp_tool_call', 'allowed', {
     tool_name: t.name,
     risk_level: risk,
+    agent_id: agentId,
     finding_counts: findingCounts,
   });
-  return executeCall(newCall as McpToolCall, s);
+  const allowedAgentLogId = agentId && guard
+    ? await logAgentCall(agentId, (newCall as { id: string }).id, t.name, guard.argsHash, guard.argsBytes, 'allowed')
+    : null;
+  return executeCall(
+    newCall as McpToolCall,
+    s,
+    allowedAgentLogId ? { agentToolCallId: allowedAgentLogId } : undefined,
+  );
 });
