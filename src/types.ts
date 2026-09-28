@@ -75,6 +75,8 @@ export interface Policy {
   conditions: PolicyCondition[];
   action: string;
   effect: Decision;
+  /** Monotonically increasing version; every meaningful edit leaves a snapshot. */
+  version: number;
   updated: string;
 }
 

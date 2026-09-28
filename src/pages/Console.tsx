@@ -2,6 +2,7 @@ import {
   Activity,
   ClipboardCheck,
   FlaskConical,
+  Gauge,
   LayoutDashboard,
   Loader2,
   Plug,
@@ -19,6 +20,7 @@ import { DataSources } from '../sections/DataSources';
 import { Requests } from '../sections/Requests';
 import { PolicyEngine } from '../sections/PolicyEngine';
 import { MembersPanel } from '../components/MembersPanel';
+import { MonitoringPanel } from '../components/MonitoringPanel';
 import { OrgSettingsPanel } from '../components/OrgSettingsPanel';
 import { ProviderConnections } from '../components/ProviderConnections';
 import { GatewayTest } from '../components/GatewayTest';
@@ -39,6 +41,7 @@ const tabs = [
   { id: 'connections', label: 'Connections', icon: Plug },
   { id: 'policies', label: 'Policies', icon: ShieldCheck },
   { id: 'events', label: 'Security Events', icon: Activity },
+  { id: 'monitoring', label: 'Monitoring', icon: Gauge },
   { id: 'approvals', label: 'Approvals', icon: ClipboardCheck },
   { id: 'users', label: 'Users', icon: Users },
   { id: 'settings', label: 'Settings', icon: Settings },
@@ -390,6 +393,7 @@ export function Console({ onSimulate }: ConsoleProps) {
           )}
           {tab === 'policies' && <PolicyEngine />}
           {tab === 'events' && <Requests />}
+          {tab === 'monitoring' && <MonitoringPanel />}
           {tab === 'approvals' && <Approvals />}
           {tab === 'users' && (
             <MembersPanel orgId={orgId} orgName={orgName} readOnly={!isAdmin} />

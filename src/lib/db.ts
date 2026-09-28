@@ -95,6 +95,8 @@ export interface PolicyRow {
   priority: number;
   rule: { conditions: PolicyConditionRow[] };
   action: string;
+  /** Monotonically increasing version; every meaningful edit leaves a snapshot. */
+  version: number;
   created_by: string | null;
   created_at: string;
   updated_at: string;

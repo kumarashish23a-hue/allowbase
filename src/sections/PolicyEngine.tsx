@@ -1,5 +1,6 @@
-import { FlaskConical, Pause, Play, Plus, Trash2 } from 'lucide-react';
+import { FlaskConical, History, Pause, Play, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { Modal } from '../components/Modal';
 import { PolicyBuilderModal } from '../components/PolicyModals';
 import { PolicyTestModal } from '../components/PolicyTestModal';
 import { Reveal } from '../components/Reveal';
@@ -8,9 +9,12 @@ import { isSupabaseConfigured } from '../lib/supabase';
 import {
   createPolicy,
   deletePolicy,
+  getPolicyVersions,
   listPolicies,
+  rollbackPolicy,
   setPolicyStatus,
   type PolicyDraft,
+  type PolicyVersion,
 } from '../services/policyService';
 import type { Policy } from '../types';
 
@@ -21,10 +25,126 @@ const effectTone: Record<Policy['effect'], string> = {
   REDACT: 'border-amber-400/30 bg-amber-400/10 text-amber-400',
 };
 
+function PolicyHistoryModal({
+  policy,
+  onClose,
+  onRolledBack,
+}: {
+  policy: Policy | null;
+  onClose: () => void;
+  onRolledBack: () => void;
+}) {
+  const [versions, setVersions] = useState<PolicyVersion[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busyVersion, setBusyVersion] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!policy) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    getPolicyVersions(policy.id)
+      .then((loaded) => {
+        if (!cancelled) setVersions(loaded);
+      })
+      .catch(() => {
+        if (!cancelled) setError('Could not load the policy history.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [policy]);
+
+  const handleRollback = async (version: PolicyVersion) => {
+    if (!policy) return;
+    const latest = versions[0]?.version ?? version.version;
+    if (
+      !window.confirm(
+        `Roll back "${policy.name}" to v${version.version}? This restores that snapshot as v${latest + 1}.`,
+      )
+    ) {
+      return;
+    }
+    setBusyVersion(version.version);
+    setError(null);
+    try {
+      await rollbackPolicy(policy.id, version.version, `Rolled back to v${version.version}`);
+      onRolledBack();
+      setVersions(await getPolicyVersions(policy.id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not roll back the policy.');
+    } finally {
+      setBusyVersion(null);
+    }
+  };
+
+  const latestVersion = versions[0]?.version;
+
+  return (
+    <Modal
+      open={policy !== null}
+      title={policy ? `History — ${policy.name}` : 'Policy history'}
+      subtitle="Every meaningful edit leaves an immutable snapshot. Rolling back restores a snapshot as a new version."
+      onClose={onClose}
+      wide
+    >
+      {loading ? (
+        <p className="text-sm text-mist-500">Loading history…</p>
+      ) : error && versions.length === 0 ? (
+        <p className="text-sm text-rose-400">{error}</p>
+      ) : (
+        <ul className="space-y-2">
+          {versions.map((version) => (
+            <li
+              key={version.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-ink-950/60 px-4 py-3"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full border border-line bg-ink-900 px-2.5 py-0.5 text-[11px] font-bold tracking-[0.12em] text-mist-200">
+                    v{version.version}
+                  </span>
+                  <span className="truncate text-sm font-medium text-mist-100">
+                    {version.name ?? '(deleted)'}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-mist-500">
+                  {new Date(version.published_at).toLocaleString()}
+                  {version.published_by ? ` · by ${version.published_by.slice(0, 8)}` : ''}
+                  {version.change_note ? ` · ${version.change_note}` : ''}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={busyVersion !== null || version.version === latestVersion}
+                onClick={() => void handleRollback(version)}
+                title={
+                  version.version === latestVersion
+                    ? 'Already the current version'
+                    : `Roll back to v${version.version}`
+                }
+                className="inline-flex items-center gap-1 rounded-lg border border-line px-2.5 py-1.5 text-xs text-mist-400 transition hover:border-line-strong hover:text-mist-100 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {busyVersion === version.version ? 'Rolling back…' : 'Roll back'}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && versions.length > 0 ? <p className="mt-3 text-sm text-rose-400">{error}</p> : null}
+    </Modal>
+  );
+}
+
 export function PolicyEngine() {
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [open, setOpen] = useState(false);
   const [testPolicy, setTestPolicy] = useState<Policy | null>(null);
+  const [historyPolicy, setHistoryPolicy] = useState<Policy | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [cardError, setCardError] = useState<string | null>(null);
 
@@ -64,6 +184,15 @@ export function PolicyEngine() {
     } finally {
       setBusyId(null);
     }
+  };
+
+  const handleRolledBack = () => {
+    // The rollback bumps the policy version, so reload the list.
+    listPolicies()
+      .then(setPolicies)
+      .catch(() => {
+        /* keep current policies when offline */
+      });
   };
 
   const handleDelete = async (policy: Policy) => {
@@ -109,6 +238,12 @@ export function PolicyEngine() {
                     </span>
                   ) : null}
                   <span
+                    className="rounded-full border border-line bg-ink-950/70 px-2.5 py-1 text-[11px] font-bold tracking-[0.12em] text-mist-300"
+                    title={`Version ${policy.version}`}
+                  >
+                    v{policy.version}
+                  </span>
+                  <span
                     className={`rounded-full border px-2.5 py-1 text-[11px] font-bold tracking-[0.12em] ${effectTone[policy.effect]}`}
                   >
                     {policy.effect}
@@ -142,6 +277,15 @@ export function PolicyEngine() {
                     className="inline-flex items-center gap-1 rounded-lg border border-line px-2 py-1.5 text-xs text-mist-400 transition hover:border-line-strong hover:text-mist-100"
                   >
                     <FlaskConical size={12} /> Test
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHistoryPolicy(policy)}
+                    title="View version history and roll back"
+                    aria-label={`History of ${policy.name}`}
+                    className="inline-flex items-center gap-1 rounded-lg border border-line px-2 py-1.5 text-xs text-mist-400 transition hover:border-line-strong hover:text-mist-100"
+                  >
+                    <History size={12} /> History
                   </button>
                   <button
                     type="button"
@@ -191,6 +335,11 @@ export function PolicyEngine() {
         open={testPolicy !== null}
         policy={testPolicy}
         onClose={() => setTestPolicy(null)}
+      />
+      <PolicyHistoryModal
+        policy={historyPolicy}
+        onClose={() => setHistoryPolicy(null)}
+        onRolledBack={handleRolledBack}
       />
     </section>
   );

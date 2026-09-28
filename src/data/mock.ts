@@ -189,6 +189,7 @@ export const policies: Policy[] = [
     ],
     action: 'Block the request and notify the data owner.',
     effect: 'BLOCK',
+    version: 1,
     updated: '2 days ago',
   },
   {
@@ -202,6 +203,7 @@ export const policies: Policy[] = [
     ],
     action: 'Allow source-code access with full audit logging.',
     effect: 'ALLOW',
+    version: 1,
     updated: '5 days ago',
   },
   {
@@ -215,6 +217,7 @@ export const policies: Policy[] = [
     ],
     action: 'Block the request and create a sensitive event.',
     effect: 'BLOCK',
+    version: 1,
     updated: '1 week ago',
   },
 ];

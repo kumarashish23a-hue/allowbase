@@ -13,6 +13,8 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
 import { detectSensitiveContent, maskSensitiveContent } from '../_shared/detect.ts';
+import { checkEndpointRateLimit, rateLimitedResponse } from '../_shared/rateLimit.ts';
+import { recordMetric, nowMs } from '../_shared/metrics.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -46,6 +48,7 @@ function badRequest(message: string): Response {
 }
 
 serve(async (req: Request): Promise<Response> => {
+  const t0 = nowMs();
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -138,6 +141,22 @@ serve(async (req: Request): Promise<Response> => {
     detections = detectSensitiveContent(body.content);
   }
 
+  // Rate limit per organization, scoped by the organization_id in the payload.
+  // The RPC is SECURITY DEFINER so this works with the caller's user client;
+  // the rate_limit_rules read inside the helper fails RLS by design and the
+  // helper falls back to its built-in constants.
+  // Fail-open: the helper allows the request if the limiter itself errors.
+  const rateLimit = await checkEndpointRateLimit(supabase, 'evaluate-ai-request', organization_id);
+  if (!rateLimit.allowed) {
+    recordMetric(supabase, {
+      functionName: 'evaluate-ai-request',
+      organizationId: organization_id,
+      status: 'rate_limited',
+      latencyMs: nowMs() - t0,
+    });
+    return rateLimitedResponse(rateLimit.retryAfter, corsHeaders);
+  }
+
   // 3. Run the secure database logic with the caller's identity.
   const { data, error } = await supabase.rpc('evaluate_ai_request', {
     p_organization_id: organization_id,
@@ -152,6 +171,16 @@ serve(async (req: Request): Promise<Response> => {
 
   if (error) {
     const status = error.code === '42501' ? 403 : 500;
+    // Best-effort production metrics (fire-and-forget; never fails the request).
+    // 403 not-a-member is a caller error -> recorded as 'ok' with an
+    // errorCode so error_rate stays a true function-health signal.
+    recordMetric(supabase, {
+      functionName: 'evaluate-ai-request',
+      organizationId: organization_id,
+      status: status === 500 ? 'error' : 'ok',
+      latencyMs: nowMs() - t0,
+      errorCode: status === 500 ? 'rpc_error' : 'not_member',
+    });
     const message =
       error.code === '42501'
         ? 'You are not a member of this organization.'
@@ -171,6 +200,12 @@ serve(async (req: Request): Promise<Response> => {
     result.transformed_content = masked;
     result.masked_count = maskedCount;
   }
+  recordMetric(supabase, {
+    functionName: 'evaluate-ai-request',
+    organizationId: organization_id,
+    status: 'ok',
+    latencyMs: nowMs() - t0,
+  });
   return new Response(JSON.stringify(result), {
     status: 200,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },

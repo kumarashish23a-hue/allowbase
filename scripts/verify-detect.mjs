@@ -156,7 +156,7 @@ const MODEL = 'f2222222-2222-4222-8222-222222222222';
 await db.exec(`
   insert into auth.users (id, email) values ('${ADMIN}', 'admin@test.local');
   create or replace function auth.uid() returns uuid language sql stable as $$ select '${ADMIN}'::uuid $$;
-  insert into public.organizations (id, name, slug) values ('${ORG}', 'Test Org', 'test-org');
+  insert into public.organizations (id, name, slug, enforcement_mode) values ('${ORG}', 'Test Org', 'test-org', 'enforce');
   insert into public.organization_members (organization_id, user_id, role, status)
   values ('${ORG}', '${ADMIN}', 'admin', 'active');
   insert into public.ai_models (id, organization_id, name, provider, model_identifier, is_external, is_approved)
@@ -178,7 +178,7 @@ async function evaluate(findings) {
 }
 
 const secretFindings = [
-  { detector: 'regex-v1', category: 'api_key', severity: 'critical', confidence: 1, count: 1 },
+  { detector: 'regex-v2', category: 'api_key', severity: 'critical', confidence: 1, count: 1 },
 ];
 let res = await evaluate(secretFindings);
 expect(res.decision === 'block', 'secret in content -> block');
@@ -194,7 +194,7 @@ expect(stored.rows[0].detection_findings.length === 1, 'findings stored on ai_re
 expect(!JSON.stringify(stored.rows[0].detection_findings).includes('AKIA'), 'stored findings contain no raw secrets');
 
 const emailFindings = [
-  { detector: 'regex-v1', category: 'email', severity: 'medium', confidence: 0.9, count: 2 },
+  { detector: 'regex-v2', category: 'email', severity: 'medium', confidence: 0.9, count: 2 },
 ];
 res = await evaluate(emailFindings);
 expect(res.decision === 'allow', 'email-only content -> allow (no policy matches)');

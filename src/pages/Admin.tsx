@@ -540,7 +540,8 @@ export function Admin() {
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-mist-100">{policy.name}</p>
                       <p className="text-xs text-mist-500">
-                        {policy.action} · priority {policy.priority} · {policy.status}
+                        {policy.action} · priority {policy.priority} · {policy.status} · v
+                        {policy.version ?? 1}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">

@@ -30,8 +30,26 @@ export function toPolicy(row: PolicyRow): Policy {
     })),
     action: row.description ?? row.action,
     effect: effectMap[row.action] ?? 'REDACT',
+    version: row.version ?? 1,
     updated: new Date(row.updated_at).toLocaleDateString(),
   };
+}
+
+/** One immutable snapshot of a policy at a point in time. */
+export interface PolicyVersion {
+  id: string;
+  policy_id: string;
+  organization_id: string;
+  version: number;
+  name: string | null;
+  description: string | null;
+  rule: unknown;
+  action: string | null;
+  priority: number | null;
+  status: string | null;
+  change_note: string | null;
+  published_by: string | null;
+  published_at: string;
 }
 
 export type PolicyAction = 'allow' | 'block' | 'mask' | 'redact' | 'require_approval';
@@ -133,6 +151,44 @@ export async function setPolicyStatus(policyId: string, status: 'active' | 'paus
   if (!supabase) throw new Error('Supabase is not configured.');
   const { error } = await supabase.from('policies').update({ status }).eq('id', policyId);
   if (error) throw new Error('Could not update the policy. Only owners, admins, or security can do this.');
+}
+
+/** Append-only version history for a policy, newest first. */
+export async function getPolicyVersions(policyId: string): Promise<PolicyVersion[]> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const { data, error } = await supabase
+    .from('policy_versions')
+    .select('*')
+    .eq('policy_id', policyId)
+    .order('version', { ascending: false });
+  if (error) throw new Error('Could not load the policy history.');
+  return data as PolicyVersion[];
+}
+
+/** Restore a policy to a previous snapshot version. Returns the new version number. */
+export async function rollbackPolicy(
+  policyId: string,
+  toVersion: number,
+  note: string,
+): Promise<number> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const { data, error } = await supabase.rpc('rollback_policy', {
+    p_policy_id: policyId,
+    p_to_version: toVersion,
+    p_note: note,
+  });
+  if (error) {
+    if (error.message === 'not_authorized') {
+      throw new Error('Only owners or admins can roll back a policy.');
+    }
+    if (error.message === 'version_not_found') {
+      throw new Error('That version no longer exists.');
+    }
+    throw new Error('Could not roll back the policy.');
+  }
+  return data as number;
 }
 
 /** Permanently delete a policy. Cannot be undone. */

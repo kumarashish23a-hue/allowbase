@@ -17,6 +17,8 @@ export interface AdminPolicy {
   status: string;
   priority: number;
   action: string;
+  /** Monotonically increasing version; every meaningful edit leaves a snapshot. */
+  version: number;
   created_at: string;
 }
 
@@ -212,7 +214,7 @@ export async function listAdminPolicies(orgId: string): Promise<AdminPolicy[]> {
   const supabase = requireClient();
   const { data, error } = await supabase
     .from('policies')
-    .select('id,name,description,status,priority,action,created_at')
+    .select('id,name,description,status,priority,action,version,created_at')
     .eq('organization_id', orgId)
     .order('priority', { ascending: true });
   if (error) throw new Error('Could not load policies.');

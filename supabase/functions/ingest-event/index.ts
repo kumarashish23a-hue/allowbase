@@ -30,6 +30,8 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
 import { detectSensitiveContent } from '../_shared/detect.ts';
+import { checkEndpointRateLimit, rateLimitedResponse } from '../_shared/rateLimit.ts';
+import { recordMetric, nowMs } from '../_shared/metrics.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -73,6 +75,7 @@ async function sha256Hex(input: string): Promise<string> {
 }
 
 serve(async (req: Request): Promise<Response> => {
+  const t0 = nowMs();
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -188,6 +191,40 @@ serve(async (req: Request): Promise<Response> => {
     return json(500, { error: 'Server misconfigured' });
   }
 
+  // Resolve the org for metric attribution (indexed key_hash lookup).
+  // Best-effort: metrics still record with a null org when the key is unknown.
+  let metricOrgId: string | null = null;
+  try {
+    const { data: keyRow } = await supabase
+      .from('api_keys')
+      .select('organization_id')
+      .eq('key_hash', keyHash)
+      .maybeSingle();
+    metricOrgId = (keyRow as { organization_id: string } | null)?.organization_id ?? null;
+  } catch {
+    /* best-effort */
+  }
+  // Best-effort production metrics (fire-and-forget; never fails the request).
+  // 4xx caller errors are recorded as 'ok' with an errorCode so error_rate
+  // stays a true function-health signal; only 5xx counts as 'error'.
+  const meter = (status: 'ok' | 'error' | 'rate_limited', errorCode?: string | null) =>
+    recordMetric(supabase, {
+      functionName: 'ingest-event',
+      organizationId: metricOrgId,
+      status,
+      latencyMs: nowMs() - t0,
+      errorCode: errorCode ?? null,
+    });
+
+  // Rate limit per API key (identified by its SHA-256 hash, the canonical
+  // key identifier; full key validity is confirmed in the RPC below).
+  // Fail-open: the helper allows the request if the limiter itself errors.
+  const rateLimit = await checkEndpointRateLimit(supabase, 'ingest-event', keyHash);
+  if (!rateLimit.allowed) {
+    meter('rate_limited');
+    return rateLimitedResponse(rateLimit.retryAfter, corsHeaders);
+  }
+
   const { data, error } = await supabase.rpc('ingest_api_event', {
     p_key_hash: keyHash,
     p_event_id: eventId,
@@ -206,6 +243,7 @@ serve(async (req: Request): Promise<Response> => {
     // 28000 = invalid key (deliberately vague). Everything else is a caller
     // error only when we recognize the message; never leak internals.
     if (code === '28000' || /invalid api key/i.test(message)) {
+      meter('ok', 'invalid_key');
       return json(401, { error: 'Invalid API key' });
     }
     if (
@@ -213,11 +251,14 @@ serve(async (req: Request): Promise<Response> => {
         message,
       )
     ) {
+      meter('ok', 'bad_request');
       return json(400, { error: message });
     }
     console.error('ingest_api_event failed:', message);
+    meter('error', 'rpc_error');
     return json(500, { error: 'Evaluation failed' });
   }
 
+  meter('ok');
   return json(200, data as Record<string, unknown>);
 });

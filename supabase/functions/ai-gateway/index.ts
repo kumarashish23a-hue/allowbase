@@ -5,6 +5,7 @@
 //
 // Every request goes through the full pipeline, server-side:
 //   1. Authenticate the caller (Supabase Auth) and check org membership.
+//   1b. Enforce the per-organization rate limit for this endpoint (fail-open).
 //   2. Load the organization's provider connection and decrypt the API key.
 //      The key never leaves this function and is never logged.
 //   3. Scan the prompt for secrets/PII (in memory; raw content is never stored).
@@ -12,6 +13,9 @@
 //   5. Block / hold-for-approval / allow. On allow with a mask policy, the
 //      detected spans are redacted BEFORE the prompt reaches the provider.
 //   6. Forward to the provider and return its answer.
+//   7. Scan the provider's RESPONSE for secrets/PII and mask it before it is
+//      returned to the caller. Findings are recorded as counts by category
+//      (never raw values) in the request metadata.
 //
 // This is what makes "Connect -> Configure -> Protect -> Monitor" real:
 // without a policy decision the provider is never called.
@@ -24,7 +28,9 @@
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
-import { detectSensitiveContent, maskSensitiveContent } from '../_shared/detect.ts';
+import { detectSensitiveContent, maskSensitiveContent, hasCriticalFinding, DETECTOR_VERSION } from '../_shared/detect.ts';
+import { checkEndpointRateLimit, rateLimitedResponse } from '../_shared/rateLimit.ts';
+import { recordMetric, nowMs } from '../_shared/metrics.ts';
 import { decryptSecret } from '../_shared/providerCrypto.ts';
 
 const corsHeaders = {
@@ -38,6 +44,9 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const GATEWAY_TIMEOUT_MS = 90000;
 const MAX_MESSAGES = 50;
 const MAX_MESSAGE_CHARS = 50000;
+// Provider response text is scanned for sensitive content up to this cap;
+// the full response is still masked before being returned.
+const RESPONSE_SCAN_MAX_CHARS = 100 * 1024;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -173,6 +182,7 @@ async function callProvider(
 }
 
 serve(async (req: Request): Promise<Response> => {
+  const t0 = nowMs();
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);
 
@@ -222,6 +232,27 @@ serve(async (req: Request): Promise<Response> => {
 
   const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
+  // Best-effort production metrics (fire-and-forget; never fails the request).
+  // 4xx caller errors are recorded as 'ok' with an errorCode so error_rate
+  // stays a true function-health signal; only 5xx counts as 'error'.
+  const meter = (status: 'ok' | 'error' | 'rate_limited', errorCode?: string | null) =>
+    recordMetric(admin, {
+      functionName: 'ai-gateway',
+      organizationId: organization_id,
+      status,
+      latencyMs: nowMs() - t0,
+      errorCode: errorCode ?? null,
+    });
+
+  // 1b. Rate limit this endpoint per organization. Fail-open: the helper
+  // allows the request when the limiter itself errors, so this is a
+  // protective control, not the auth boundary.
+  const rateLimit = await checkEndpointRateLimit(admin, 'ai-gateway', organization_id);
+  if (!rateLimit.allowed) {
+    meter('rate_limited');
+    return rateLimitedResponse(rateLimit.retryAfter, corsHeaders);
+  }
+
   // 2. Load the provider connection and decrypt the key (in memory only).
   const { data: conn, error: connError } = await admin
     .from('ai_provider_connections')
@@ -231,6 +262,7 @@ serve(async (req: Request): Promise<Response> => {
     .eq('status', 'active')
     .maybeSingle();
   if (connError || !conn) {
+    meter('ok', 'no_connection');
     return json({ error: `No active ${provider} connection. Connect it first in the console.` }, 400);
   }
   let apiKey: string;
@@ -240,6 +272,7 @@ serve(async (req: Request): Promise<Response> => {
       conn.key_iv as string,
     );
   } catch {
+    meter('error', 'decrypt_error');
     return json(
       { error: 'Could not decrypt the stored key. The PROVIDER_ENCRYPTION_KEY secret may have changed — reconnect the provider.' },
       500,
@@ -294,6 +327,7 @@ serve(async (req: Request): Promise<Response> => {
   });
   if (rpcError) {
     const status = rpcError.code === '42501' ? 403 : 500;
+    meter(status === 500 ? 'error' : 'ok', status === 500 ? 'policy_eval_error' : 'not_member');
     return json({ error: 'Policy evaluation failed.' }, status);
   }
   const evaluation = result as {
@@ -307,6 +341,7 @@ serve(async (req: Request): Promise<Response> => {
   };
 
   if (evaluation.decision === 'block') {
+    meter('ok', 'policy_block');
     return json(
       {
         forwarded: false,
@@ -319,6 +354,7 @@ serve(async (req: Request): Promise<Response> => {
     );
   }
   if (evaluation.approval_required) {
+    meter('ok', 'approval_required');
     return json(
       {
         forwarded: false,
@@ -331,6 +367,7 @@ serve(async (req: Request): Promise<Response> => {
     );
   }
   if (evaluation.decision === 'review') {
+    meter('ok', 'policy_review');
     return json(
       {
         forwarded: false,
@@ -354,6 +391,7 @@ serve(async (req: Request): Promise<Response> => {
     providerResult = await callProvider(provider, (conn.base_url as string | null) ?? null, apiKey, model, outgoing);
   } catch (error) {
     // Never leak the key or raw provider internals — status line only.
+    meter('error', 'provider_error');
     return json(
       {
         forwarded: false,
@@ -367,27 +405,53 @@ serve(async (req: Request): Promise<Response> => {
     apiKey = '';
   }
 
+  // 7. Scan the provider's response for sensitive content (in memory; raw
+  //    response text is never stored) and mask it before returning it to the
+  //    caller. Only the first RESPONSE_SCAN_MAX_CHARS are scanned; masking
+  //    applies to the full response. Findings are recorded as counts by
+  //    category — never raw values.
+  const responseFindings = detectSensitiveContent(providerResult.text.slice(0, RESPONSE_SCAN_MAX_CHARS));
+  const maskedResponse = maskSensitiveContent(providerResult.text);
+  const responseMaskedCritical = hasCriticalFinding(responseFindings);
+
   // Stamp the gateway call on the request row for the audit trail
   // (merged into the evaluation metadata, never replacing it).
-  const { data: reqRow } = await admin
-    .from('ai_requests')
-    .select('metadata')
-    .eq('id', evaluation.request_id)
-    .single();
-  const existingMeta = ((reqRow as { metadata?: Record<string, unknown> } | null)?.metadata ?? {}) as Record<
-    string,
-    unknown
-  >;
-  await admin
-    .from('ai_requests')
-    .update({
-      metadata: {
-        ...existingMeta,
-        gateway: { provider, model, masked: evaluation.masked === true },
-      },
-    })
-    .eq('id', evaluation.request_id);
+  // Best-effort: an audit-write failure must not fail the user's request.
+  try {
+    const { data: reqRow } = await admin
+      .from('ai_requests')
+      .select('metadata')
+      .eq('id', evaluation.request_id)
+      .single();
+    const existingMeta = ((reqRow as { metadata?: Record<string, unknown> } | null)?.metadata ?? {}) as Record<
+      string,
+      unknown
+    >;
+    await admin
+      .from('ai_requests')
+      .update({
+        metadata: {
+          ...existingMeta,
+          gateway: {
+            provider,
+            model,
+            masked: evaluation.masked === true,
+            response_scan: {
+              detector: DETECTOR_VERSION,
+              // Counts by category only — raw matched values never leave detect.ts.
+              counts_by_category: Object.fromEntries(responseFindings.map((f) => [f.category, f.count])),
+              spans_masked: maskedResponse.maskedCount,
+              response_masked: responseMaskedCritical,
+            },
+          },
+        },
+      })
+      .eq('id', evaluation.request_id);
+  } catch {
+    /* audit stamp is best-effort */
+  }
 
+  meter('ok');
   return json({
     forwarded: true,
     decision: 'allow',
@@ -395,7 +459,7 @@ serve(async (req: Request): Promise<Response> => {
     request_id: evaluation.request_id,
     provider,
     model,
-    text: providerResult.text,
+    text: maskedResponse.masked,
     usage: providerResult.usage,
   });
 });

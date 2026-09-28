@@ -111,6 +111,10 @@ try {
 await db.exec(`
   create or replace function auth.uid() returns uuid
     language sql stable as $$ select 'b0000000-0000-4000-8000-0000000000a2'::uuid $$;
+  insert into auth.users (id, email)
+  values ('b0000000-0000-4000-8000-0000000000a2', 'demo-admin@example.com'),
+         ('b0000000-0000-4000-8000-0000000000b3', 'demo-member@example.com')
+  on conflict (id) do nothing;
   insert into public.organization_members (organization_id, user_id, role, status)
   values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'b0000000-0000-4000-8000-0000000000a2', 'admin', 'active')
   on conflict (organization_id, user_id) do update set status = 'active', role = 'admin';

@@ -15,6 +15,7 @@ export type DetectionCategory =
   | 'phone'
   | 'credit_card'
   | 'gov_id'
+  | 'iban'
   | 'api_key'
   | 'private_key'
   | 'jwt'
@@ -23,7 +24,7 @@ export type DetectionCategory =
 export type DetectionSeverity = 'low' | 'medium' | 'high' | 'critical';
 
 export interface ContentFinding {
-  /** Detector version that produced this finding, e.g. "regex-v1". */
+  /** Detector version that produced this finding, e.g. "regex-v2". */
   detector: string;
   category: DetectionCategory;
   severity: DetectionSeverity;
@@ -33,7 +34,7 @@ export interface ContentFinding {
   count: number;
 }
 
-export const DETECTOR_VERSION = 'regex-v1';
+export const DETECTOR_VERSION = 'regex-v2';
 /** Findings per scan are capped so a pathological input can't blow up storage. */
 export const MAX_FINDINGS_PER_CATEGORY = 99;
 
@@ -59,6 +60,25 @@ function luhnValid(digits: string): boolean {
     doubleDigit = !doubleDigit;
   }
   return sum % 10 === 0;
+}
+
+/**
+ * IBAN mod-97 checksum (ISO 13616): move the first four characters to the
+ * end, expand letters A=10..Z=35, and require remainder 1. Runs in O(n)
+ * with a rolling remainder so arbitrarily long IBANs never overflow.
+ */
+function ibanMod97Valid(iban: string): boolean {
+  const rearranged = iban.slice(4) + iban.slice(0, 4);
+  let remainder = 0;
+  for (let i = 0; i < rearranged.length; i++) {
+    const code = rearranged.charCodeAt(i);
+    const value = code >= 65 && code <= 90 ? code - 55 : code - 48; // A=10..Z=35, 0-9
+    if (value < 0 || value > 35) return false;
+    // A letter expands to two decimal digits; fold each digit in turn.
+    const digits = value < 10 ? [value] : [Math.floor(value / 10), value % 10];
+    for (const d of digits) remainder = (remainder * 10 + d) % 97;
+  }
+  return remainder === 1;
 }
 
 const RULES: DetectorRule[] = [
@@ -102,8 +122,42 @@ const RULES: DetectorRule[] = [
     category: 'gov_id',
     severity: 'high',
     confidence: 0.9,
-    // US SSN shape; other national IDs can be added as separate rules.
+    // US SSN shape; other national IDs follow as separate rules below.
     pattern: /\b\d{3}-\d{2}-\d{4}\b/g,
+  },
+  {
+    category: 'gov_id',
+    severity: 'high',
+    confidence: 0.9,
+    // Indian PAN: 5 letters, 4 digits, 1 letter (e.g. ABCDE1234F).
+    pattern: /\b[A-Z]{5}[0-9]{4}[A-Z]\b/g,
+  },
+  {
+    category: 'gov_id',
+    severity: 'high',
+    confidence: 0.85,
+    // Indian Aadhaar: 12 digits, commonly grouped 4-4-4 with single spaces.
+    pattern: /\b\d{4}\s?\d{4}\s?\d{4}\b/g,
+    validate: (m, offset, input) => {
+      if (m.replace(/\s/g, '').length !== 12) return false;
+      // Reject matches embedded in a longer digit run (e.g. the first 12
+      // digits of a 16-digit card number): look past spaces on either side.
+      const before = input.slice(0, offset).replace(/\s*$/, '');
+      const after = input.slice(offset + m.length).replace(/^\s*/, '');
+      return !/\d$/.test(before) && !/^\d/.test(after);
+    },
+  },
+  {
+    category: 'iban',
+    severity: 'high',
+    confidence: 0.9,
+    // IBAN: 2-letter country + 2 check digits + 11-30 BBAN chars; display
+    // format often groups with spaces ("GB29 NWBK 6016 1331 9268 19").
+    pattern: /\b[A-Z]{2}[0-9]{2}(?: ?[A-Z0-9]{1,4}){3,8}\b/g,
+    validate: (m) => {
+      const iban = m.replace(/\s/g, '');
+      return iban.length >= 15 && iban.length <= 34 && ibanMod97Valid(iban);
+    },
   },
   {
     category: 'api_key',
