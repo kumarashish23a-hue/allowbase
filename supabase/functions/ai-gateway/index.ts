@@ -17,11 +17,15 @@
 //      detected spans are redacted BEFORE the prompt reaches the provider.
 //      On allow with a tokenize policy, spans are replaced with vault token
 //      ids (reversible for this org's actors; the provider sees only tokens).
-//   6. Forward to the provider and return its answer.
-//   7. Scan the provider's RESPONSE for secrets/PII and mask it before it is
-//      returned to the caller. Token ids the provider echoes back are
-//      detokenized for the org actor AFTER masking, so model-introduced
-//      secrets are still caught. Findings are recorded as counts by category
+//   6. Forward to the provider and return its answer — either as one JSON
+//      body (default) or as a sanitized SSE stream (stream: true).
+//   7. Scan the provider's RESPONSE for secrets/PII and attack patterns.
+//      Non-streaming: the full text is scanned, PII/secrets masked, and
+//      token ids detokenized for the org actor before returning.
+//      Streaming: each chunk passes through the StreamInspector (2 KB
+//      overlap catches secrets split across chunks); critical findings and
+//      high-severity attack patterns terminate the stream, high-severity
+//      secrets are redacted. Findings are recorded as counts by category
 //      (never raw values) in the request metadata.
 //
 // This is what makes "Connect -> Configure -> Protect -> Monitor" real:
@@ -42,6 +46,7 @@ import { detectSensitiveContent, maskSensitiveContent, hasCriticalFinding, DETEC
 import { detectThreats, hasCriticalThreat, THREAT_DETECTOR_VERSION } from '../_shared/threat.ts';
 import { tokenize, detokenize } from '../_shared/tokenize.ts';
 import type { TokenVault, StoredToken } from '../_shared/tokenize.ts';
+import { StreamInspector, STREAM_INSPECTOR_VERSION } from '../_shared/streamInspect.ts';
 import { checkEndpointRateLimit, rateLimitedResponse } from '../_shared/rateLimit.ts';
 import { recordMetric, nowMs } from '../_shared/metrics.ts';
 import { decryptSecret } from '../_shared/providerCrypto.ts';
@@ -111,6 +116,9 @@ function validate(body: Record<string, unknown>, requireOrg: boolean): string | 
   }
   if (body.agent_id !== undefined && body.agent_id !== null && (typeof body.agent_id !== 'string' || !UUID_RE.test(body.agent_id))) {
     return 'agent_id must be a UUID or null.';
+  }
+  if (body.stream !== undefined && typeof body.stream !== 'boolean') {
+    return 'stream must be a boolean.';
   }
   return null;
 }
@@ -198,6 +206,260 @@ async function callProvider(
   };
   const text = (data.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join('');
   return { text, usage: data.usageMetadata ?? null };
+}
+
+interface StreamParams {
+  admin: SupabaseClient;
+  organizationId: string;
+  callerUserId: string | null;
+  provider: string;
+  storedBase: string | null;
+  apiKey: string;
+  model: string;
+  outgoing: GatewayMessage[];
+  tokenVault: TokenVault;
+  tokenizedOut: boolean;
+  requestId: string;
+  meter: (status: 'ok' | 'error' | 'rate_limited', errorCode?: string | null) => void;
+}
+
+/**
+ * Phase D: streaming provider call with output inspection (OpenAI SSE first).
+ *
+ * The provider's SSE stream is parsed chunk by chunk; each content delta
+ * goes through a StreamInspector (2 KB overlap catches secrets split
+ * across chunks) before anything reaches the caller:
+ * - critical secret/key or critical/high attack pattern -> the provider
+ *   stream is cancelled, the caller gets a termination event, and an
+ *   audit row is written (response-side blocking).
+ * - high-severity secret (SSN, card, ...) -> the span is redacted in flight.
+ * - medium/low -> passed through; counted for the audit trail.
+ *
+ * When the request was tokenized, a 64-char-overlap detokenize stage sits
+ * between the inspector and the caller (token ids are 30 chars, so a split
+ * id is always completed before resolve). Inspection runs BEFORE
+ * detokenization — the restored values belong to this org's authorized
+ * actor and must not be re-inspected (mask-before-detokenize order).
+ *
+ * Caller protocol (text/event-stream):
+ *   data: {"type":"start","request_id":...}
+ *   data: {"type":"content","content":"..."}   (sanitized deltas)
+ *   data: {"type":"done","terminated":bool,"terminate_reason":...,"usage":...}
+ *   data: [DONE]
+ */
+async function streamProviderResponse(p: StreamParams): Promise<Response> {
+  const base = (p.storedBase ?? 'https://api.openai.com/v1').replace(/\/$/, '');
+  const res = await fetch(`${base}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+      Authorization: `Bearer ${p.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: p.model,
+      messages: p.outgoing.map((m) => ({ role: m.role, content: m.content })),
+      stream: true,
+      stream_options: { include_usage: true },
+    }),
+    signal: AbortSignal.timeout(GATEWAY_TIMEOUT_MS),
+  });
+  if (!res.ok || !res.body) throw new Error(`Provider returned ${res.status}.`);
+
+  const inspector = new StreamInspector();
+  const tokenKey = p.tokenizedOut ? (Deno.env.get('TOKEN_ENCRYPTION_KEY') ?? '') : '';
+  // Outbound already failed closed without the key, so it exists here; if it
+  // vanished mid-request (rotation) token ids stay opaque rather than
+  // failing the whole stream.
+  const tokenKeyOk = /^[0-9a-fA-F]{64}$/.test(tokenKey);
+  const actorType = p.callerUserId ? 'user' : 'machine_key';
+
+  let detokCarry = '';
+  let usage: Record<string, unknown> | null = null;
+  let streamTerminated = false;
+  let terminateReason: string | null = null;
+
+  const encoder = new TextEncoder();
+  const sse = (obj: unknown): Uint8Array => encoder.encode(`data: ${JSON.stringify(obj)}\n\n`);
+
+  /** Detokenize with a 64-char holdback so split token ids resolve whole. */
+  async function detokEmit(text: string, isFinal: boolean): Promise<string> {
+    if (!p.tokenizedOut || !tokenKeyOk) return text;
+    const combined = detokCarry + text;
+    const processUpTo = isFinal ? combined.length : Math.max(0, combined.length - 64);
+    const toProcess = combined.slice(0, processUpTo);
+    detokCarry = combined.slice(processUpTo);
+    if (!toProcess) return '';
+    const de = await detokenize(toProcess, {
+      vault: p.tokenVault,
+      organizationId: p.organizationId,
+      encryptionKeyHex: tokenKey,
+      actorUserId: p.callerUserId,
+      actorType,
+    });
+    return de.text;
+  }
+
+  async function stampStreamAudit(): Promise<void> {
+    const summary = inspector.summary();
+    try {
+      const { data: reqRow } = await p.admin
+        .from('ai_requests')
+        .select('metadata')
+        .eq('id', p.requestId)
+        .single();
+      const existingMeta = ((reqRow as { metadata?: Record<string, unknown> } | null)?.metadata ?? {}) as Record<
+        string,
+        unknown
+      >;
+      await p.admin
+        .from('ai_requests')
+        .update({
+          metadata: {
+            ...existingMeta,
+            gateway: {
+              ...((existingMeta.gateway ?? {}) as Record<string, unknown>),
+              stream: {
+                inspector: STREAM_INSPECTOR_VERSION,
+                chunks: summary.chunks,
+                bytes: summary.bytes,
+                terminated: summary.terminated,
+                terminate_reason: summary.terminateReason,
+                counts_by_category: summary.countsByCategory,
+                redactions: summary.redactions,
+                usage,
+              },
+            },
+          },
+        })
+        .eq('id', p.requestId);
+      if (summary.terminated) {
+        await p.admin.from('audit_logs').insert({
+          organization_id: p.organizationId,
+          actor_user_id: p.callerUserId,
+          actor_type: actorType,
+          action: 'stream_terminated',
+          resource_type: 'ai_request',
+          resource_id: p.requestId,
+          result: 'terminated',
+          // Categories and counts only — never raw matched values.
+          metadata: {
+            reason: summary.terminateReason,
+            inspector: STREAM_INSPECTOR_VERSION,
+            counts_by_category: summary.countsByCategory,
+            chunks: summary.chunks,
+            bytes: summary.bytes,
+          },
+        });
+      }
+    } catch {
+      /* audit stamp is best-effort */
+    }
+  }
+
+  const body = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        controller.enqueue(sse({ type: 'start', request_id: p.requestId, provider: p.provider, model: p.model }));
+        const reader = res.body!.getReader();
+        const decoder = new TextDecoder();
+        let sseBuf = '';
+        let providerDone = false;
+        while (!providerDone) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          sseBuf += decoder.decode(value, { stream: true });
+          let idx: number;
+          while (!providerDone && (idx = sseBuf.indexOf('\n\n')) !== -1) {
+            const event = sseBuf.slice(0, idx);
+            sseBuf = sseBuf.slice(idx + 2);
+            for (const line of event.split('\n')) {
+              const t = line.trim();
+              if (!t.startsWith('data:')) continue;
+              const data = t.slice(5).trim();
+              if (data === '[DONE]') {
+                providerDone = true;
+                break;
+              }
+              let payload: {
+                choices?: { delta?: { content?: string }; message?: { content?: string } }[];
+                usage?: Record<string, unknown>;
+              };
+              try {
+                payload = JSON.parse(data);
+              } catch {
+                continue;
+              }
+              if (payload.usage) usage = payload.usage;
+              const delta =
+                payload.choices?.[0]?.delta?.content ?? payload.choices?.[0]?.message?.content ?? '';
+              if (typeof delta !== 'string' || delta.length === 0) continue;
+              const step = inspector.inspect(delta);
+              if (step.terminated) {
+                streamTerminated = true;
+                terminateReason = step.terminateReason;
+                providerDone = true;
+                try {
+                  await reader.cancel();
+                } catch {
+                  /* provider stream already closing */
+                }
+                break;
+              }
+              if (step.output) {
+                const out = await detokEmit(step.output, false);
+                if (out) controller.enqueue(sse({ type: 'content', content: out }));
+              }
+            }
+          }
+        }
+        if (!streamTerminated) {
+          const fin = inspector.finalize();
+          if (fin.terminated) {
+            streamTerminated = true;
+            terminateReason = fin.terminateReason;
+          } else {
+            if (fin.output) {
+              const out = await detokEmit(fin.output, true);
+              if (out) controller.enqueue(sse({ type: 'content', content: out }));
+            } else if (detokCarry) {
+              const out = await detokEmit('', true);
+              if (out) controller.enqueue(sse({ type: 'content', content: out }));
+            }
+          }
+        }
+        await stampStreamAudit();
+        controller.enqueue(
+          sse({
+            type: 'done',
+            terminated: streamTerminated,
+            terminate_reason: terminateReason,
+            request_id: p.requestId,
+            usage,
+          }),
+        );
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        controller.close();
+      } catch {
+        try {
+          controller.enqueue(sse({ type: 'error', error: 'Streaming failed.' }));
+        } catch {
+          /* controller already closed */
+        }
+        controller.close();
+      }
+    },
+  });
+
+  p.meter('ok');
+  return new Response(body, {
+    headers: {
+      ...corsHeaders,
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'X-Accel-Buffering': 'no',
+    },
+  });
 }
 
 serve(async (req: Request): Promise<Response> => {
@@ -577,6 +839,30 @@ serve(async (req: Request): Promise<Response> => {
         500,
       );
     }
+    // Phase D: streaming inspection (OpenAI SSE first). The streaming path
+    // returns its own Response; the finally below still redacts the key,
+    // and the stream audit stamp is written when the stream ends.
+    const wantStream = body.stream === true;
+    if (wantStream && provider !== 'openai' && provider !== 'custom') {
+      meter('ok', 'stream_unsupported');
+      return json({ error: 'Streaming inspection is currently supported for openai/custom providers only.' }, 400);
+    }
+    if (wantStream) {
+      return await streamProviderResponse({
+        admin,
+        organizationId: organization_id,
+        callerUserId,
+        provider,
+        storedBase,
+        apiKey,
+        model,
+        outgoing,
+        tokenVault,
+        tokenizedOut: evaluation.tokenized === true,
+        requestId: evaluation.request_id,
+        meter,
+      });
+    }
     providerResult = await callProvider(provider, storedBase, apiKey, model, outgoing);
   } catch (error) {
     // Never leak the key or raw provider internals — status line only.
@@ -671,8 +957,11 @@ serve(async (req: Request): Promise<Response> => {
               spans_masked: maskedResponse.maskedCount,
               response_masked: responseMaskedCritical,
               // A critical threat in the response (e.g. destructive commands
-              // the model generated) is surfaced here; response-side blocking
-              // arrives with streaming inspection (Phase D).
+              // the model generated) is surfaced here. The non-streaming
+              // path still only surfaces it; the streaming path (stream:
+              // true) terminates the stream on critical findings and
+              // high-severity attack patterns — that is the response-side
+              // blocking.
               threat_critical: hasCriticalThreat(responseThreatFindings),
             },
           },

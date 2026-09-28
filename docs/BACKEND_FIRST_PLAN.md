@@ -86,7 +86,15 @@ Mask/redact are destructive-only; real PII workflows need reversible, auditable 
 
 **Tests:** `scripts/verify-tokenize.mjs` — round-trip, expiry enforced, revocation enforced, cross-org resolve denied + audited, key rotation documented.
 
-## Phase D — Streaming output inspection 🟡 → ✅ (hardest phase)
+## Phase D — Streaming output inspection ✅ SHIPPED 2026-09-28 (commit pending)
+
+Response-side blocking for the AI gateway's streaming path:
+
+- **`_shared/streamInspect.ts`** (zero-dep, `stream-v1`): `StreamInspector` scans each provider chunk with a 2 KB rolling overlap buffer, so secrets split across chunk boundaries are still caught. Verdicts: critical secret/key or critical/high attack pattern → terminate (drop chunk, close provider stream, audit); high-severity secret (SSN, card, …) → redact spans in flight; medium/low → pass with counts. Findings carry categories/counts only, never values.
+- **ai-gateway**: `stream: true` (OpenAI SSE / OpenAI-compatible custom providers first; 400 for others) returns `text/event-stream` (`start`/`content`/`done` events + `[DONE]`). Pipeline per chunk: SSE parse → inspector → 64-char-overlap detokenize stage (only when the request was tokenized; inspection runs BEFORE detokenization so restored values aren't re-inspected) → caller. Termination writes a `stream_terminated` audit row and stamps the request metadata with the inspector summary.
+- This closes the Phase A gap for the streaming path: high/critical attack patterns in model output now terminate the stream. The non-streaming path still surfaces `threat_critical` in metadata only (documented in-code).
+- **Tests:** `scripts/verify-streaming.mjs` — 29 assertions green (clean passthrough, boundary-split secrets, terminate + audit hygiene, in-flight redaction, jailbreak termination, token-id passthrough, tiny-overlap boundary, finalize flush, empty chunks).
+- **Honest residuals** (in module header + docs): termination isn't retroactive; padding > 2 KB between secret halves defeats reassembly (locked in by test 9); encoded exfiltration defeats regex; per-step counts can double-count the overlap tail (signal, not accounting). 🟡 → ✅ (hardest phase)
 
 Current output scan caps at 100KB, non-streaming — an exfiltration window on long responses.
 
