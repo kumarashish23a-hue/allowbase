@@ -41,14 +41,19 @@ interface CreateKeyResult {
  * Mint a key. The plaintext is returned ONCE — the caller must show it to the
  * user immediately; it can never be retrieved again.
  */
-export async function createApiKey(name: string, expiresAt: string | null): Promise<CreatedApiKey> {
+export async function createApiKey(
+  name: string,
+  expiresAt: string | null,
+  scopes: string[] = ['ingest'],
+): Promise<CreatedApiKey> {
   const supabase = getSupabase();
   const orgId = await getActiveOrganizationId();
   if (!supabase || !orgId) throw new Error('Sign in to create an API key.');
+  if (scopes.length === 0) throw new Error('Pick at least one scope for the key.');
   const { data, error } = await supabase.rpc('create_api_key', {
     p_organization_id: orgId,
     p_name: name.trim(),
-    p_scopes: ['ingest'],
+    p_scopes: scopes,
     p_expires_at: expiresAt,
   });
   if (error) {
@@ -72,4 +77,11 @@ export function getIngestEndpoint(): string | null {
   const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
   if (!url) return null;
   return `${url.replace(/\/$/, '')}/functions/v1/ingest-event`;
+}
+
+/** AI gateway endpoint URL for the connected Supabase project. */
+export function getGatewayEndpoint(): string | null {
+  const url = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+  if (!url) return null;
+  return `${url.replace(/\/$/, '')}/functions/v1/ai-gateway`;
 }

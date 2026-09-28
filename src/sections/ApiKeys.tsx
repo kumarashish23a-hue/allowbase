@@ -6,6 +6,7 @@ import { SectionHeading } from '../components/SectionHeading';
 import { getActiveOrganizationId, getSupabase, isSupabaseConfigured } from '../lib/supabase';
 import {
   createApiKey,
+  getGatewayEndpoint,
   getIngestEndpoint,
   listApiKeys,
   revokeApiKey,
@@ -20,6 +21,13 @@ const EXPIRIES = [
   { label: '90 days', days: 90 },
   { label: '1 year', days: 365 },
 ];
+
+const SCOPES = [
+  { id: 'ingest', label: 'Ingest events', hint: 'Log AI requests and get policy decisions via ingest-event.' },
+  { id: 'gateway', label: 'AI gateway', hint: 'Route AI traffic through the gateway with policy checks + masking.' },
+];
+
+const SCOPE_LABELS: Record<string, string> = { ingest: 'ingest', gateway: 'gateway' };
 
 function formatDate(value: string | null): string {
   if (!value) return '—';
@@ -71,11 +79,17 @@ export function ApiKeys() {
   const [createOpen, setCreateOpen] = useState(false);
   const [keyName, setKeyName] = useState('');
   const [expiryDays, setExpiryDays] = useState(0);
+  const [scopes, setScopes] = useState<string[]>(['ingest']);
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<CreatedApiKey | null>(null);
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
   const [revoking, setRevoking] = useState(false);
   const endpoint = getIngestEndpoint();
+  const gatewayEndpoint = getGatewayEndpoint();
+
+  const toggleScope = (id: string) => {
+    setScopes((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
+  };
 
   const reload = async () => {
     try {
@@ -125,17 +139,18 @@ export function ApiKeys() {
     setCreated(null);
     setKeyName('');
     setExpiryDays(0);
+    setScopes(['ingest']);
     setError(null);
   };
 
   const handleCreate = async () => {
-    if (!keyName.trim() || creating) return;
+    if (!keyName.trim() || creating || scopes.length === 0) return;
     setCreating(true);
     setError(null);
     try {
       const expiresAt =
         expiryDays > 0 ? new Date(Date.now() + expiryDays * 86400000).toISOString() : null;
-      const result = await createApiKey(keyName, expiresAt);
+      const result = await createApiKey(keyName, expiresAt, scopes);
       setCreated(result);
       await reload();
     } catch (err) {
@@ -174,6 +189,20 @@ export function ApiKeys() {
   }'
 # → {"decision":"allow","risk":"low", ...}
 # Check-mode: only call the model when decision is "allow".`;
+
+  const gatewayCurlExample = `curl -X POST ${gatewayEndpoint ?? 'https://<project>.supabase.co/functions/v1/ai-gateway'} \\
+  -H "x-api-key: dcp_live_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "organization_id": "<org-uuid>",
+    "provider": "openai",
+    "model": "gpt-4o-mini",
+    "purpose": "customer-support",
+    "messages": [{"role": "user", "content": "Summarize this ticket"}]
+  }'
+# Needs a key with the "gateway" scope. The organization_id must be the key's
+# own organization. The request is policy-checked, then forwarded to the
+# provider; secrets in the response are masked before they come back.`;
 
   return (
     <section id="api-keys" className="border-y border-line bg-ink-900/40">
@@ -251,6 +280,16 @@ export function ApiKeys() {
                             >
                               {status.label}
                             </span>
+                            <span className="flex items-center gap-1.5">
+                              {(key.scopes ?? []).map((s) => (
+                                <span
+                                  key={s}
+                                  className="rounded-full border border-line bg-ink-900/60 px-2 py-0.5 font-mono text-[11px] text-mist-400"
+                                >
+                                  {SCOPE_LABELS[s] ?? s}
+                                </span>
+                              ))}
+                            </span>
                             {canManage && live ? (
                               <button
                                 type="button"
@@ -282,6 +321,18 @@ export function ApiKeys() {
                     <CopyButton text={curlExample} label="Copy curl example" />
                   </div>
                   <pre className="code-block thin-scroll overflow-x-auto p-5 text-mist-200">{curlExample}</pre>
+                </div>
+              </Reveal>
+
+              <Reveal>
+                <div className="overflow-hidden rounded-xl border border-line bg-ink-950/80">
+                  <div className="flex items-center justify-between border-b border-line px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-mist-500">
+                      Route traffic through the gateway
+                    </p>
+                    <CopyButton text={gatewayCurlExample} label="Copy gateway curl example" />
+                  </div>
+                  <pre className="code-block thin-scroll overflow-x-auto p-5 text-mist-200">{gatewayCurlExample}</pre>
                 </div>
               </Reveal>
             </div>
@@ -352,10 +403,35 @@ export function ApiKeys() {
                 ))}
               </select>
             </div>
+            <div>
+              <span className="mb-1.5 block text-sm font-medium text-mist-200">Scopes</span>
+              <div className="space-y-2">
+                {SCOPES.map((scope) => (
+                  <label
+                    key={scope.id}
+                    className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-ink-950/60 px-3.5 py-2.5 transition hover:border-line-strong"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={scopes.includes(scope.id)}
+                      onChange={() => toggleScope(scope.id)}
+                      className="mt-1 h-4 w-4 shrink-0 accent-teal-400"
+                    />
+                    <span>
+                      <span className="block text-sm font-medium text-mist-100">{scope.label}</span>
+                      <span className="block text-xs text-mist-500">{scope.hint}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              {scopes.length === 0 ? (
+                <p className="mt-1.5 text-xs text-rose-400">Pick at least one scope.</p>
+              ) : null}
+            </div>
             <button
               type="button"
               onClick={() => void handleCreate()}
-              disabled={!keyName.trim() || creating}
+              disabled={!keyName.trim() || creating || scopes.length === 0}
               className="btn-primary w-full rounded-lg px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
             >
               {creating ? 'Creating…' : 'Create key'}

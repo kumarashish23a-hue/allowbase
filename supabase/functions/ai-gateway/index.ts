@@ -4,8 +4,11 @@
 // AI providers.
 //
 // Every request goes through the full pipeline, server-side:
-//   1. Authenticate the caller (Supabase Auth) and check org membership.
-//   1b. Enforce the per-organization rate limit for this endpoint (fail-open).
+//   1. Authenticate the caller: a machine API key with the 'gateway' scope
+//      (x-api-key header; the key's organization is authoritative) or a
+//      Supabase user session + org membership check.
+//   1b. Enforce the rate limit for this endpoint — per API key for machine
+//      callers, per organization for human callers (fail-open).
 //   2. Load the organization's provider connection and decrypt the API key.
 //      The key never leaves this function and is never logged.
 //   3. Scan the prompt for secrets/PII (in memory; raw content is never stored).
@@ -32,10 +35,11 @@ import { detectSensitiveContent, maskSensitiveContent, hasCriticalFinding, DETEC
 import { checkEndpointRateLimit, rateLimitedResponse } from '../_shared/rateLimit.ts';
 import { recordMetric, nowMs } from '../_shared/metrics.ts';
 import { decryptSecret } from '../_shared/providerCrypto.ts';
+import { extractApiKey, sha256Hex, verifyApiKeyForScope } from '../_shared/apiKeys.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
@@ -193,18 +197,22 @@ serve(async (req: Request): Promise<Response> => {
     return json({ error: 'Server misconfigured.' }, 500);
   }
 
-  // 1. Authenticate the caller.
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader?.startsWith('Bearer ')) return json({ error: 'Missing authorization.' }, 401);
-  const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: authHeader } },
-    auth: { persistSession: false },
-  });
-  const {
-    data: { user },
-    error: userError,
-  } = await userClient.auth.getUser();
-  if (userError || !user) return json({ error: 'Invalid or expired session.' }, 401);
+  // 1. Authenticate the caller: a machine API key (x-api-key header carrying a
+  //    key with the 'gateway' scope) or a Supabase user session. An API key
+  //    authenticates the *organization* — the request body must name the
+  //    key's organization (checked below), so a key can never act on another
+  //    org. (JWTs never start with dcp_, so the two credentials never collide.)
+  const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+
+  let apiKeyHash: string | null = null;
+  let keyOrganizationId: string | null = null;
+  const rawApiKey = extractApiKey(req);
+  if (rawApiKey) {
+    apiKeyHash = await sha256Hex(rawApiKey);
+    const verified = await verifyApiKeyForScope(admin, apiKeyHash, 'gateway');
+    if (!verified) return json({ error: 'Invalid API key.' }, 401);
+    keyOrganizationId = verified.organizationId;
+  }
 
   let body: Record<string, unknown>;
   try {
@@ -216,21 +224,39 @@ serve(async (req: Request): Promise<Response> => {
   if (validationError) return json({ error: validationError }, 400);
 
   const organization_id = body.organization_id as string;
+
+  if (keyOrganizationId) {
+    // Machine caller: the body must name the key's own organization.
+    if (organization_id !== keyOrganizationId) {
+      return json({ error: 'Organization mismatch.' }, 403);
+    }
+  } else {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) return json({ error: 'Missing authorization.' }, 401);
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+      auth: { persistSession: false },
+    });
+    const {
+      data: { user },
+      error: userError,
+    } = await userClient.auth.getUser();
+    if (userError || !user) return json({ error: 'Invalid or expired session.' }, 401);
+
+    // Any active member may call the gateway; policies decide what happens.
+    const { data: isMember, error: memberError } = await userClient.rpc('has_org_role', {
+      org_id: organization_id,
+      allowed: ['owner', 'admin', 'security', 'developer', 'analyst', 'viewer'],
+    });
+    if (memberError || !isMember) return json({ error: 'Not a member of this organization.' }, 403);
+  }
+
   const provider = body.provider as string;
   const model = body.model as string;
   const messages = body.messages as GatewayMessage[];
   const purpose = typeof body.purpose === 'string' && body.purpose.length > 0 ? body.purpose : `AI gateway: ${model}`;
   const data_asset_ids = (body.data_asset_ids as string[] | undefined) ?? [];
   const agent_id = (body.agent_id as string | null | undefined) ?? null;
-
-  // Any active member may call the gateway; policies decide what happens.
-  const { data: isMember, error: memberError } = await userClient.rpc('has_org_role', {
-    org_id: organization_id,
-    allowed: ['owner', 'admin', 'security', 'developer', 'analyst', 'viewer'],
-  });
-  if (memberError || !isMember) return json({ error: 'Not a member of this organization.' }, 403);
-
-  const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
   // Best-effort production metrics (fire-and-forget; never fails the request).
   // 4xx caller errors are recorded as 'ok' with an errorCode so error_rate
@@ -244,10 +270,15 @@ serve(async (req: Request): Promise<Response> => {
       errorCode: errorCode ?? null,
     });
 
-  // 1b. Rate limit this endpoint per organization. Fail-open: the helper
-  // allows the request when the limiter itself errors, so this is a
-  // protective control, not the auth boundary.
-  const rateLimit = await checkEndpointRateLimit(admin, 'ai-gateway', organization_id);
+  // 1b. Rate limit this endpoint: per API key for machine callers, per
+  // organization for human callers. Fail-open: the helper allows the request
+  // when the limiter itself errors, so this is a protective control, not the
+  // auth boundary.
+  const rateLimit = await checkEndpointRateLimit(
+    admin,
+    'ai-gateway',
+    apiKeyHash ? `key:${apiKeyHash}` : organization_id,
+  );
   if (!rateLimit.allowed) {
     meter('rate_limited');
     return rateLimitedResponse(rateLimit.retryAfter, corsHeaders);
