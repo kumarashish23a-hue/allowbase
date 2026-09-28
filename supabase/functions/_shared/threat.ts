@@ -187,12 +187,14 @@ const RULES: ThreatRule[] = [
   // Heuristic by design: exfiltration language co-occurring with an outbound
   // channel (URL / webhook). The validate step requires the channel so plain
   // discussion of exfiltration ("how do we prevent exfiltration?") does not
-  // fire.
+  // fire. The "send <anything> to <url>" arm is deliberately broad — sharing a
+  // link ("send the doc to https://...") can false-positive, so prefer the
+  // review/monitor policy action over block for this category.
   {
     category: 'exfiltration_attempt',
     severity: 'high',
     confidence: 0.7,
-    pattern: /exfiltrat\w*|send\s+(the\s+data|it|them|everything)\s+to|upload\s+\S[\s\S]{0,40}?\s+to\s+|post\s+\S[\s\S]{0,40}?\s+to\s+/gi,
+    pattern: /exfiltrat\w*|send\s+\S[\s\S]{0,40}?\s+to\s+|upload\s+\S[\s\S]{0,40}?\s+to\s+|post\s+\S[\s\S]{0,40}?\s+to\s+/gi,
     validate: (_m, _o, input) => URL_PATTERN.test(input),
   },
   // -- malicious_instruction ---------------------------------------------------
