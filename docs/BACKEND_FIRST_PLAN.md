@@ -42,7 +42,7 @@ Core milestone already works: PUBLIC→ALLOW, PII→MASK, API KEY→BLOCK, all s
 
 **Done when:** 6 categories detected deterministically; a policy can block on `threat.category`; findings carry no raw content; tests green.
 
-## Phase B — Quick wins ✅ SHIPPED 2026-09-28 (commit pending)
+## Phase B — Quick wins ✅ SHIPPED 2026-09-28
 
 ~~(one build, three holes closed)~~ All three closed.
 
@@ -64,7 +64,7 @@ Core milestone already works: PUBLIC→ALLOW, PII→MASK, API KEY→BLOCK, all s
 
 **Tests:** extend existing verify scripts (expiry: approve-after-expiry fails; SSRF: private-IP hostnames rejected; models: concurrent double-register → one row).
 
-## Phase C — Tokenization vault ✅ SHIPPED 2026-09-28 (commit pending)
+## Phase C — Tokenization vault ✅ SHIPPED 2026-09-28
 
 Reversible PII protection for the AI gateway:
 
@@ -86,7 +86,7 @@ Mask/redact are destructive-only; real PII workflows need reversible, auditable 
 
 **Tests:** `scripts/verify-tokenize.mjs` — round-trip, expiry enforced, revocation enforced, cross-org resolve denied + audited, key rotation documented.
 
-## Phase D — Streaming output inspection ✅ SHIPPED 2026-09-28 (commit pending)
+## Phase D — Streaming output inspection ✅ SHIPPED 2026-09-28
 
 Response-side blocking for the AI gateway's streaming path:
 
@@ -105,7 +105,7 @@ Current output scan caps at 100KB, non-streaming — an exfiltration window on l
 
 **Tests:** simulated chunked stream with secrets split mid-token across chunks; termination + audit verified.
 
-## Phase E — RAG security ✅ SHIPPED 2026-09-28 (commit pending)
+## Phase E — RAG security ✅ SHIPPED 2026-09-28
 
 Classified, ACL-governed retrieval over an org-owned corpus:
 
@@ -121,7 +121,7 @@ Classified, ACL-governed retrieval over an org-owned corpus:
 - Retrieval API: query → embed → similarity search **filtered by** `(org_id, requester clearance ≥ chunk classification, explicit grants)` → policy check → context to LLM.
 - Requires configuration: embedding provider/model (documented; pgvector extension on Supabase).
 
-## Phase F — MCP gateway ✅ SHIPPED 2026-09-28 (commit pending)
+## Phase F — MCP gateway ✅ SHIPPED 2026-09-28
 
 A security gateway in front of MCP servers (tool calls are attacker-influenced — they come from the agent/model):
 
@@ -136,7 +136,7 @@ A security gateway in front of MCP servers (tool calls are attacker-influenced �
 - New edge function `mcp-gateway`: auth → tool identification → argument inspection (`detect.ts`) → threat check → policy → ALLOW / TRANSFORM / APPROVAL / BLOCK → execute → output inspection.
 - Dangerous operations (`delete`, `drop`, `export`, `transfer`, `execute`) default to `require_approval`.
 
-## Phase G — Agent guardrails ✅ SHIPPED 2026-09-28 (commit pending)
+## Phase G — Agent guardrails ✅ SHIPPED 2026-09-28
 
 Per-agent policy enforcement on tool use, with anomaly detection:
 
