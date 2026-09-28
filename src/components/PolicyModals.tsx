@@ -8,6 +8,8 @@ import type {
   PolicyOperator,
 } from '../services/policyService';
 import { Modal } from './Modal';
+import { parseRuleSentence, summarizeParsed, suggestPolicyName } from '../lib/parseRule';
+import type { ParsedRule } from '../lib/parseRule';
 
 interface InfoModalProps {
   open: boolean;
@@ -238,7 +240,9 @@ export function PolicyBuilderModal({ open, onClose, onCreate }: PolicyBuilderMod
   const [priority, setPriority] = useState('10');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [simple, setSimple] = useState(true);
+  const [mode, setMode] = useState<'write' | 'simple' | 'custom'>('write');
+  const [sentence, setSentence] = useState('');
+  const [built, setBuilt] = useState<ParsedRule | null>(null);
   const [simpleLevels, setSimpleLevels] = useState<string[]>(['confidential', 'restricted']);
   const [simpleAction, setSimpleAction] = useState<PolicyAction>('block');
 
@@ -286,11 +290,31 @@ export function PolicyBuilderModal({ open, onClose, onCreate }: PolicyBuilderMod
     return null;
   };
 
+  const buildFromSentence = () => {
+    const parsed = parseRuleSentence(sentence);
+    setBuilt(parsed);
+    if (parsed.conditions.length === 0) {
+      setError(parsed.warnings[0] ?? 'Could not understand that sentence — try again.');
+      return;
+    }
+    setError(null);
+    setRows(
+      parsed.conditions.map((c) => ({
+        field: c.field,
+        operator: c.operator,
+        value: c.value,
+      })),
+    );
+    setAction(parsed.action);
+    if (!name.trim()) setName(suggestPolicyName(parsed));
+  };
+
   const save = async () => {
-    const effectiveRows: ConditionRow[] = simple
-      ? [{ field: 'data.classification', operator: 'in' as PolicyOperator, value: simpleLevels }]
-      : rows;
-    const effectiveAction: PolicyAction = simple ? simpleAction : action;
+    const effectiveRows: ConditionRow[] =
+      mode === 'simple'
+        ? [{ field: 'data.classification', operator: 'in' as PolicyOperator, value: simpleLevels }]
+        : rows;
+    const effectiveAction: PolicyAction = mode === 'simple' ? simpleAction : action;
     const problem = validate(effectiveRows);
     if (problem) {
       setError(problem);
@@ -322,11 +346,14 @@ export function PolicyBuilderModal({ open, onClose, onCreate }: PolicyBuilderMod
   };
 
   const actionLabel = ACTIONS.find((a) => a.value === action)?.label ?? action;
-  const preview = simple
-    ? simpleSummary(simpleLevels, simpleAction)
-    : rows.length > 0
-      ? `IF ${rows.map(describeCondition).join(' AND ')} THEN ${actionLabel.toLowerCase()} (priority ${priority || '10'})`
-      : '';
+  const preview =
+    mode === 'simple'
+      ? simpleSummary(simpleLevels, simpleAction)
+      : mode === 'write' && built && built.conditions.length > 0
+        ? summarizeParsed(built)
+        : rows.length > 0
+          ? `IF ${rows.map(describeCondition).join(' AND ')} THEN ${actionLabel.toLowerCase()} (priority ${priority || '10'})`
+          : '';
 
   return (
     <Modal open={open} onClose={onClose} title="Create policy" subtitle="Real policy. Saved to your workspace and enforced on every AI request.">
@@ -343,8 +370,9 @@ export function PolicyBuilderModal({ open, onClose, onCreate }: PolicyBuilderMod
             className={inputCls}
           />
         </div>
-        <div>
-          <label htmlFor="policy-desc" className={labelCls}>
+        {mode !== 'write' ? (
+          <div>
+            <label htmlFor="policy-desc" className={labelCls}>
             Description <span className="normal-case tracking-normal text-mist-600">(optional)</span>
           </label>
           <input
@@ -354,21 +382,117 @@ export function PolicyBuilderModal({ open, onClose, onCreate }: PolicyBuilderMod
             placeholder="Why this rule exists"
             className={inputCls}
           />
+          </div>
+        ) : null}
+
+        <div
+          className="flex gap-1 rounded-xl border border-line bg-ink-950/60 p-1"
+          role="tablist"
+          aria-label="Policy builder mode"
+        >
+          {(
+            [
+              ['write', 'Describe'],
+              ['simple', 'Tap'],
+              ['custom', 'Custom'],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={mode === value}
+              onClick={() => {
+                setMode(value);
+                setError(null);
+              }}
+              className={`flex-1 rounded-lg px-3 py-2 text-xs font-bold transition ${
+                mode === value
+                  ? 'bg-accent-500/15 text-accent-600'
+                  : 'text-mist-400 hover:text-mist-100'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
-        {simple ? (
+        {mode === 'write' ? (
           <div className="space-y-4">
             <div>
-              <div className="mb-2 flex items-center justify-between">
-                <span className={labelCls}>When the data is…</span>
-                <button
-                  type="button"
-                  onClick={() => setSimple(false)}
-                  className="text-xs text-accent-600 transition hover:text-accent-500"
-                >
-                  Custom rule →
-                </button>
+              <label htmlFor="rule-sentence" className={labelCls}>
+                Describe your rule
+              </label>
+              <textarea
+                id="rule-sentence"
+                value={sentence}
+                onChange={(event) => {
+                  setSentence(event.target.value);
+                  setBuilt(null);
+                }}
+                placeholder="e.g. Block emails and passwords sent to external AI"
+                rows={3}
+                className={`${inputCls} resize-none`}
+              />
+              <p className="mt-1 text-[11px] text-mist-600">
+                Say what to protect and what to do — block, ask me first, or hide secrets.
+              </p>
+            </div>
+            {!built || built.conditions.length === 0 ? (
+              <button
+                type="button"
+                onClick={buildFromSentence}
+                disabled={!sentence.trim()}
+                className="w-full rounded-xl bg-accent-500 px-4 py-3 text-sm font-semibold text-accent-ink transition hover:bg-accent-400 disabled:opacity-50"
+              >
+                Build my rule →
+              </button>
+            ) : (
+              <div className="space-y-3 rounded-xl border border-line bg-ink-950/60 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-mist-500">
+                  Here’s what I understood
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {built.conditions.map((c, i) => (
+                    <span
+                      key={i}
+                      className="rounded-full border border-accent-400/40 bg-accent-500/10 px-2.5 py-1 text-xs text-accent-600"
+                    >
+                      {c.label}
+                    </span>
+                  ))}
+                  <span className="rounded-full border border-line px-2.5 py-1 text-xs font-bold text-mist-200">
+                    THEN {action.toUpperCase().replace('_', ' ')}
+                  </span>
+                </div>
+                {built.warnings.map((w, i) => (
+                  <p key={i} className="text-[11px] text-amber-400/90">
+                    {w}
+                  </p>
+                ))}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={buildFromSentence}
+                    className="rounded-xl border border-line px-3 py-2 text-xs font-semibold text-mist-300 transition hover:text-mist-100"
+                  >
+                    ↻ Rebuild
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode('custom')}
+                    className="rounded-xl border border-line px-3 py-2 text-xs font-semibold text-mist-300 transition hover:text-mist-100"
+                  >
+                    Tweak details →
+                  </button>
+                </div>
               </div>
+            )}
+          </div>
+        ) : mode === 'simple' ? (
+          <div className="space-y-4">
+            <div>
+              <span className={labelCls}>When the data is…</span>
               <div className="flex flex-wrap gap-2">
                 {SIMPLE_LEVELS.map((level) => {
                   const picked = simpleLevels.includes(level.value);
@@ -429,16 +553,7 @@ export function PolicyBuilderModal({ open, onClose, onCreate }: PolicyBuilderMod
         ) : (
           <>
           <div>
-            <div className="mb-2 flex items-center justify-between">
-              <span className={labelCls}>If — all of these must match</span>
-              <button
-                type="button"
-                onClick={() => setSimple(true)}
-                className="text-xs text-accent-600 transition hover:text-accent-500"
-              >
-                ← Simple mode
-              </button>
-            </div>
+            <span className={labelCls}>If — all of these must match</span>
             <div className="mt-2 space-y-3">
             {rows.map((row, index) => {
               const def = fieldDef(row.field);
@@ -610,22 +725,24 @@ export function PolicyBuilderModal({ open, onClose, onCreate }: PolicyBuilderMod
           </>
         )}
 
-        <div>
-          <label htmlFor="policy-priority" className={labelCls}>
-            Priority
-          </label>
-          <input
-            id="policy-priority"
-            type="number"
-            min={0}
-            value={priority}
-            onChange={(event) => setPriority(event.target.value)}
-            className={inputCls}
-          />
-          <p className="mt-1 text-[11px] text-mist-600">
-            Lower numbers are checked first. The first matching policy wins.
-          </p>
-        </div>
+        {mode !== 'write' ? (
+          <div>
+            <label htmlFor="policy-priority" className={labelCls}>
+              Priority
+            </label>
+            <input
+              id="policy-priority"
+              type="number"
+              min={0}
+              value={priority}
+              onChange={(event) => setPriority(event.target.value)}
+              className={inputCls}
+            />
+            <p className="mt-1 text-[11px] text-mist-600">
+              Lower numbers are checked first. The first matching policy wins.
+            </p>
+          </div>
+        ) : null}
 
         {preview ? (
           <p className="rounded-xl border border-line bg-ink-950/60 px-3 py-2.5 text-xs leading-relaxed text-mist-300">
@@ -634,14 +751,16 @@ export function PolicyBuilderModal({ open, onClose, onCreate }: PolicyBuilderMod
         ) : null}
         {error ? <p className="text-sm text-rose-400">{error}</p> : null}
 
-        <button
-          type="button"
-          onClick={() => void save()}
-          disabled={saving}
-          className="w-full rounded-xl bg-accent-500 px-4 py-3 text-sm font-semibold text-accent-ink transition hover:bg-accent-400 disabled:opacity-50"
-        >
-          {saving ? 'Saving…' : 'Save policy'}
-        </button>
+        {mode !== 'write' || (built && built.conditions.length > 0) ? (
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={saving}
+            className="w-full rounded-xl bg-accent-500 px-4 py-3 text-sm font-semibold text-accent-ink transition hover:bg-accent-400 disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : 'Save policy'}
+          </button>
+        ) : null}
       </div>
     </Modal>
   );
