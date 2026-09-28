@@ -15,9 +15,13 @@
 //   4. Evaluate policies via the secure evaluate_ai_request Postgres function.
 //   5. Block / hold-for-approval / allow. On allow with a mask policy, the
 //      detected spans are redacted BEFORE the prompt reaches the provider.
+//      On allow with a tokenize policy, spans are replaced with vault token
+//      ids (reversible for this org's actors; the provider sees only tokens).
 //   6. Forward to the provider and return its answer.
 //   7. Scan the provider's RESPONSE for secrets/PII and mask it before it is
-//      returned to the caller. Findings are recorded as counts by category
+//      returned to the caller. Token ids the provider echoes back are
+//      detokenized for the org actor AFTER masking, so model-introduced
+//      secrets are still caught. Findings are recorded as counts by category
 //      (never raw values) in the request metadata.
 //
 // This is what makes "Connect -> Configure -> Protect -> Monitor" real:
@@ -28,12 +32,16 @@
 //
 // Deploy: supabase functions deploy ai-gateway
 // Requires: ai-provider deployed + connected, PROVIDER_ENCRYPTION_KEY secret.
+// TOKEN_ENCRYPTION_KEY is additionally required when any tokenize policy is
+// used (the gateway fails closed without it).
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
 import { detectSensitiveContent, maskSensitiveContent, hasCriticalFinding, DETECTOR_VERSION } from '../_shared/detect.ts';
 import { detectThreats, hasCriticalThreat, THREAT_DETECTOR_VERSION } from '../_shared/threat.ts';
+import { tokenize, detokenize } from '../_shared/tokenize.ts';
+import type { TokenVault, StoredToken } from '../_shared/tokenize.ts';
 import { checkEndpointRateLimit, rateLimitedResponse } from '../_shared/rateLimit.ts';
 import { recordMetric, nowMs } from '../_shared/metrics.ts';
 import { decryptSecret } from '../_shared/providerCrypto.ts';
@@ -214,6 +222,8 @@ serve(async (req: Request): Promise<Response> => {
 
   let apiKeyHash: string | null = null;
   let keyOrganizationId: string | null = null;
+  // The human caller's user id (JWT path only); used for token-vault auditing.
+  let callerUserId: string | null = null;
   // Set on the JWT path only; the machine-key path never touches it.
   let userClient: SupabaseClient | null = null;
   const rawApiKey = extractApiKey(req);
@@ -254,6 +264,7 @@ serve(async (req: Request): Promise<Response> => {
       error: userError,
     } = await jwtClient.auth.getUser();
     if (userError || !user) return json({ error: 'Invalid or expired session.' }, 401);
+    callerUserId = user.id;
 
     // Calling the gateway spends real provider quota, so viewers and
     // analysts are excluded — same posture as connecting a provider.
@@ -438,6 +449,7 @@ serve(async (req: Request): Promise<Response> => {
     reasons: string[];
     detections: unknown[];
     masked?: boolean;
+    tokenized?: boolean;
     approval_required?: boolean;
     approval_request_id?: string | null;
   };
@@ -482,11 +494,74 @@ serve(async (req: Request): Promise<Response> => {
     );
   }
 
-  // 6. Allowed — mask first when a mask policy triggered, then forward.
-  const outgoing: GatewayMessage[] =
-    evaluation.masked === true
-      ? messages.map((m) => ({ ...m, content: maskSensitiveContent(m.content).masked }))
-      : messages;
+  // 6. Allowed — transform first when a transform policy triggered, then forward.
+  //    mask: destructive redaction before the provider sees the prompt.
+  //    tokenize: reversible substitution via the privacy vault (token ids go
+  //    to the provider; originals are AES-GCM encrypted at rest and restored
+  //    only for this organization's authorized actors on the way back).
+  const tokenVault: TokenVault = {
+    create: async (entry) => {
+      const { error } = await admin.from('privacy_tokens').insert(entry);
+      if (error) throw new Error(`token vault write failed: ${error.message}`);
+    },
+    lookup: async (token_id) => {
+      const { data, error } = await admin
+        .from('privacy_tokens')
+        .select('token_id, organization_id, value_encrypted, value_iv, purpose, expires_at, revoked_at')
+        .eq('token_id', token_id)
+        .maybeSingle();
+      if (error) throw new Error(`token vault read failed: ${error.message}`);
+      return (data as StoredToken | null) ?? null;
+    },
+    recordResolve: async (token_id) => {
+      const { data } = await admin
+        .from('privacy_tokens')
+        .select('resolved_count')
+        .eq('token_id', token_id)
+        .maybeSingle();
+      await admin
+        .from('privacy_tokens')
+        .update({
+          resolved_count: ((data as { resolved_count?: number } | null)?.resolved_count ?? 0) + 1,
+          last_resolved_at: new Date().toISOString(),
+        })
+        .eq('token_id', token_id);
+    },
+    audit: async (entry) => {
+      const { error } = await admin.from('audit_logs').insert(entry);
+      if (error) throw new Error(`token vault audit failed: ${error.message}`);
+    },
+  };
+
+  let outgoing: GatewayMessage[] = messages;
+  let tokenizeCount = 0;
+  if (evaluation.masked === true) {
+    outgoing = messages.map((m) => ({ ...m, content: maskSensitiveContent(m.content).masked }));
+  } else if (evaluation.tokenized === true) {
+    const tokenKey = Deno.env.get('TOKEN_ENCRYPTION_KEY') ?? '';
+    if (!/^[0-9a-fA-F]{64}$/.test(tokenKey)) {
+      // Fail closed: a tokenize policy fired but the vault key is missing.
+      // Sending the raw prompt would silently downgrade the protection.
+      meter('error', 'token_key_missing');
+      return json(
+        { error: 'A tokenize policy matched but TOKEN_ENCRYPTION_KEY is not configured. Set it with: supabase secrets set TOKEN_ENCRYPTION_KEY=$(openssl rand -hex 32)' },
+        500,
+      );
+    }
+    const tokenized = await Promise.all(
+      messages.map((m) =>
+        tokenize(m.content, detections as Array<{ category: string }>, {
+          vault: tokenVault,
+          organizationId: organization_id,
+          encryptionKeyHex: tokenKey,
+          actorUserId: callerUserId,
+          actorType: callerUserId ? 'user' : 'machine_key',
+        }),
+      ),
+    );
+    outgoing = messages.map((m, i) => ({ ...m, content: tokenized[i].text }));
+    tokenizeCount = tokenized.reduce((n, t) => n + t.tokens.length, 0);
+  }
 
   let providerResult: ProviderCall;
   try {
@@ -534,6 +609,34 @@ serve(async (req: Request): Promise<Response> => {
   const maskedResponse = maskSensitiveContent(providerResult.text);
   const responseMaskedCritical = hasCriticalFinding(responseContentFindings);
 
+  // Detokenize AFTER masking: token ids (abt_tok_...) match no detection
+  // rule, so they survive masking — model-introduced secrets are still
+  // caught while this org's authorized actor gets their real values back.
+  // Unknown, expired, revoked, or foreign-org tokens stay opaque and are
+  // counted, never resolved. If the vault key vanished between outbound
+  // and inbound (rotation), tokens stay opaque rather than failing the
+  // whole response — the provider only ever saw token ids anyway.
+  let responseText = maskedResponse.masked;
+  let tokensResolved = 0;
+  let tokensUnresolved = 0;
+  if (evaluation.tokenized === true) {
+    const tokenKey = Deno.env.get('TOKEN_ENCRYPTION_KEY') ?? '';
+    if (/^[0-9a-fA-F]{64}$/.test(tokenKey)) {
+      const de = await detokenize(maskedResponse.masked, {
+        vault: tokenVault,
+        organizationId: organization_id,
+        encryptionKeyHex: tokenKey,
+        actorUserId: callerUserId,
+        actorType: callerUserId ? 'user' : 'machine_key',
+      });
+      responseText = de.text;
+      tokensResolved = de.resolved;
+      tokensUnresolved = de.unresolved;
+    } else {
+      tokensUnresolved = (maskedResponse.masked.match(/abt_tok_[A-Za-z0-9_-]{22}/g) ?? []).length;
+    }
+  }
+
   // Stamp the gateway call on the request row for the audit trail
   // (merged into the evaluation metadata, never replacing it).
   // Best-effort: an audit-write failure must not fail the user's request.
@@ -556,6 +659,10 @@ serve(async (req: Request): Promise<Response> => {
             provider,
             model,
             masked: evaluation.masked === true,
+            tokenized: evaluation.tokenized === true,
+            tokens_created: tokenizeCount,
+            tokens_resolved: tokensResolved,
+            tokens_unresolved: tokensUnresolved,
             response_scan: {
               detector: DETECTOR_VERSION,
               threat_detector: THREAT_DETECTOR_VERSION,
@@ -581,10 +688,14 @@ serve(async (req: Request): Promise<Response> => {
     forwarded: true,
     decision: 'allow',
     masked: evaluation.masked === true,
+    tokenized: evaluation.tokenized === true,
+    tokens_created: tokenizeCount,
+    tokens_resolved: tokensResolved,
+    tokens_unresolved: tokensUnresolved,
     request_id: evaluation.request_id,
     provider,
     model,
-    text: maskedResponse.masked,
+    text: responseText,
     usage: providerResult.usage,
   });
 });

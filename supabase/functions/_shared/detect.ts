@@ -327,3 +327,48 @@ export function maskSensitiveContent(content: string): MaskResult {
     categories: [...new Set(accepted.map((s) => s.category))],
   };
 }
+
+/** A sensitive span located in content, without the matched value itself. */
+export interface SensitiveSpan {
+  start: number;
+  end: number;
+  category: DetectionCategory;
+}
+
+/**
+ * Locate every sensitive span in content (same rules and overlap resolution
+ * as maskSensitiveContent) without transforming anything. Used by the
+ * tokenization vault, which needs span positions to substitute token ids.
+ * The matched values themselves are never returned — only positions and
+ * categories — so callers must re-slice the original string to access them,
+ * and must never put the values in logs or API responses.
+ */
+export function detectSensitiveSpans(content: string): SensitiveSpan[] {
+  if (typeof content !== 'string' || content.length === 0) return [];
+  const spans: SensitiveSpan[] = [];
+  for (const rule of RULES) {
+    rule.pattern.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    // Same bound as detection so adversarial input can't spin forever.
+    let steps = 0;
+    while ((match = rule.pattern.exec(content)) !== null && steps < 10000) {
+      steps++;
+      if (match[0].length === 0) {
+        rule.pattern.lastIndex++;
+        continue;
+      }
+      if (!rule.validate || rule.validate(match[0], match.index, content)) {
+        spans.push({ start: match.index, end: match.index + match[0].length, category: rule.category });
+      }
+    }
+  }
+  // Prefer earlier, longer spans; drop anything overlapping an accepted span.
+  spans.sort((a, b) => a.start - b.start || b.end - a.end);
+  const accepted: SensitiveSpan[] = [];
+  for (const span of spans) {
+    if (accepted.some((s) => span.start < s.end && s.start < span.end)) continue;
+    accepted.push(span);
+  }
+  accepted.sort((a, b) => a.start - b.start);
+  return accepted;
+}

@@ -56,6 +56,11 @@ expect(r.action === 'mask', 'action: hide → mask');
 expect(cond(r, 'content.category')?.value?.includes('secret'), 'secret detected');
 expect(cond(r, 'content.category')?.value?.includes('api_key'), 'api key detected');
 
+// 3b. Tokenize phrasing
+r = parseRuleSentence('tokenize emails sent to external AI');
+expect(r.action === 'tokenize', 'action: tokenize → tokenize');
+expect(cond(r, 'content.category')?.value?.includes('email'), 'email detected for tokenize');
+
 // 4. Classification levels
 r = parseRuleSentence('stop anything confidential or restricted');
 expect(r.action === 'block', 'action: stop → block');

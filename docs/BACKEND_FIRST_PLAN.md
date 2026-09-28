@@ -64,7 +64,17 @@ Core milestone already works: PUBLIC→ALLOW, PII→MASK, API KEY→BLOCK, all s
 
 **Tests:** extend existing verify scripts (expiry: approve-after-expiry fails; SSRF: private-IP hostnames rejected; models: concurrent double-register → one row).
 
-## Phase C — Tokenization vault ❌ → ✅
+## Phase C — Tokenization vault ✅ SHIPPED 2026-09-28 (commit pending)
+
+Reversible PII protection for the AI gateway:
+
+- **027**: `privacy_tokens` table (token_id `abt_tok_<22 base64url>`, AES-GCM value_encrypted + iv, purpose, created_by, 7-day default expiry, revoked_at, resolve counters) + RLS (members read metadata only; writes via service role) + `'tokenize'` added to the policy action vocabulary + `evaluate_ai_request` recreated as a 016-superset (v_tokenize/v_would_tokenize, transform priority DENY > REQUIRE_APPROVAL > REVIEW > MASK/TOKENIZE > ALLOW, tokenized/would_tokenize in metadata/audit/risk/response; diff vs 016 proves only intentional changes).
+- **`_shared/tokenize.ts`** (zero-dep): `tokenize()` replaces finding-scoped spans with token ids (AES-GCM via TOKEN_ENCRYPTION_KEY, distinct token per span so frequency analysis reveals nothing); `detokenize()` restores only for the same org while unexpired/unrevoked, audits every resolve, leaves unknown tokens opaque. Findings/audits carry categories and counts — never values. New `detectSensitiveSpans()` in detect.ts (same rules/overlap as masking).
+- **ai-gateway**: tokenize outbound when `evaluation.tokenized` (fails closed with 500 if TOKEN_ENCRYPTION_KEY missing — never silently downgrades); detokenize inbound AFTER masking so model-introduced secrets are still caught while token ids survive masking; token counts stamped in request metadata + response.
+- Policy builder (Describe/Tap/Custom) + plain-English parser accept `tokenize`; SetupModal secret step now sets both encryption keys.
+- **Tests:** `scripts/verify-tokenize.mjs` — 36 assertions green (unit: format, encrypt/decrypt round-trip, scope, expiry, revocation, cross-org isolation, wrong-key fail-closed, audit hygiene; PGlite: 001–027, allow+tokenized, mask-outranks-tokenize, monitor would_tokenize, RLS). Parser suite + all prior suites still green.
+
+Honest limits: detokenization is per request — tokens are not shared across requests; rotating TOKEN_ENCRYPTION_KEY orphans existing tokens (they stay opaque); token ids in provider logs are unresolvable without the vault. ❌ → ✅
 
 Mask/redact are destructive-only; real PII workflows need reversible, auditable tokenization.
 

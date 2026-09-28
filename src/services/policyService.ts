@@ -52,7 +52,7 @@ export interface PolicyVersion {
   published_at: string;
 }
 
-export type PolicyAction = 'allow' | 'block' | 'mask' | 'redact' | 'require_approval';
+export type PolicyAction = 'allow' | 'block' | 'mask' | 'redact' | 'require_approval' | 'tokenize';
 export type PolicyOperator = 'equals' | 'not_equals' | 'in' | 'not_in';
 
 export interface PolicyConditionDraft {

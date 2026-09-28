@@ -512,9 +512,9 @@ export function SetupModal({ open, onClose, onSignIn, onTrySimulator, blocking =
           )}
           {renderCopyStep(
             2,
-            'Set the encryption secret',
-            'The AI gateway uses this to encrypt provider keys. Run once.',
-            'npx supabase secrets set PROVIDER_ENCRYPTION_KEY=$(openssl rand -hex 32)',
+            'Set the encryption secrets',
+            'The AI gateway uses these to encrypt provider keys and token-vault values. Run once.',
+            'npx supabase secrets set PROVIDER_ENCRYPTION_KEY=$(openssl rand -hex 32) && npx supabase secrets set TOKEN_ENCRYPTION_KEY=$(openssl rand -hex 32)',
           )}
           {renderCopyStep(3, 'Deploy all services', 'One command deploys everything AllowBase needs.', deployAll)}
         </div>

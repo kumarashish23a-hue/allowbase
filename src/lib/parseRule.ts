@@ -31,6 +31,7 @@ const ACTION_KEYWORDS: { action: PolicyAction; pattern: RegExp }[] = [
   { action: 'require_approval', pattern: /\b(ask me|approval|approve|review|hold|holds|confirm|permission)\b/ },
   { action: 'redact', pattern: /\b(redact|remove|removes|strip|delete)\b/ },
   { action: 'mask', pattern: /\b(mask|hide|hides|cover|covers|obscure|anonymize)\b/ },
+  { action: 'tokenize', pattern: /\b(tokenize|tokenise|tokenization|detokenizable)\b/ },
   { action: 'allow', pattern: /\b(allow|allows|permit|let through|let it through)\b/ },
 ];
 
@@ -226,6 +227,7 @@ const ACTION_VERBS: Record<PolicyAction, string> = {
   block: 'Block',
   require_approval: 'Ask before allowing',
   mask: 'Hide secrets in',
+  tokenize: 'Replace with reversible tokens in',
   redact: 'Redact',
   allow: 'Allow',
 };

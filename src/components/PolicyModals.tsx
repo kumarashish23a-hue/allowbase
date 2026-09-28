@@ -179,6 +179,7 @@ const ACTIONS: { value: PolicyAction; label: string; desc: string }[] = [
   { value: 'allow', label: 'ALLOW', desc: 'Let it through, logged for audit.' },
   { value: 'block', label: 'BLOCK', desc: 'Stop it. The AI never sees the data.' },
   { value: 'mask', label: 'MASK', desc: 'Hide detected secrets, then allow.' },
+  { value: 'tokenize', label: 'TOKENIZE', desc: 'Replace with reversible tokens, then allow.' },
   { value: 'redact', label: 'REDACT', desc: 'Remove sensitive parts, then allow.' },
   { value: 'require_approval', label: 'REQUIRE APPROVAL', desc: 'Hold it until someone approves.' },
 ];
@@ -227,6 +228,7 @@ const SIMPLE_ACTIONS: { value: PolicyAction; label: string; desc: string }[] = [
   { value: 'block', label: 'Stop it', desc: 'The AI never sees the data.' },
   { value: 'require_approval', label: 'Ask me first', desc: 'Hold it until someone approves.' },
   { value: 'mask', label: 'Hide secrets', desc: 'Cover emails, keys and secrets, then allow.' },
+  { value: 'tokenize', label: 'Tokenize', desc: 'Replace with tokens you can reverse later.' },
 ];
 
 function simpleSummary(levels: string[], action: PolicyAction): string {
@@ -236,7 +238,9 @@ function simpleSummary(levels: string[], action: PolicyAction): string {
       ? 'stop it — the AI never sees it'
       : action === 'require_approval'
         ? 'hold it until someone approves'
-        : 'hide any secrets in it, then allow it';
+        : action === 'tokenize'
+          ? 'replace secrets with reversible tokens, then allow it'
+          : 'hide any secrets in it, then allow it';
   return `If the data is ${levels.join(' or ')}, ${what}.`;
 }
 
