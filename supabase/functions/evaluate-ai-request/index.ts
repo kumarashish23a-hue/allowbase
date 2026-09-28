@@ -161,6 +161,12 @@ serve(async (req: Request): Promise<Response> => {
   }
 
   // 3. Run the secure database logic with the caller's identity.
+  // Lazy approval expiry (no pg_cron): best-effort sweep before evaluation.
+  try {
+    await supabase.rpc('expire_stale_approvals');
+  } catch {
+    /* hygiene only — never fail the request */
+  }
   const { data, error } = await supabase.rpc('evaluate_ai_request', {
     p_organization_id: organization_id,
     p_ai_model_id: ai_model_id,

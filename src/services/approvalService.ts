@@ -5,6 +5,8 @@ export interface ApprovalItem {
   status: 'pending' | 'approved' | 'rejected' | 'expired';
   note: string | null;
   created_at: string;
+  /** When the request stops being decidable (null only for pre-026 rows). */
+  expires_at: string | null;
   decided_at: string | null;
   request: {
     id: string;
@@ -32,6 +34,7 @@ interface ApprovalRow {
   status: ApprovalItem['status'];
   note: string | null;
   created_at: string;
+  expires_at: string | null;
   decided_at: string | null;
   ai_requests: ApprovalRequestRow | ApprovalRequestRow[] | null;
 }
@@ -50,7 +53,7 @@ export async function listApprovals(): Promise<ApprovalItem[]> {
   const { data, error } = await supabase
     .from('approval_requests')
     .select(
-      'id,status,note,created_at,decided_at, ai_requests!inner(id,purpose,status,risk_level,created_at,metadata, ai_models(name))',
+      'id,status,note,created_at,expires_at,decided_at, ai_requests!inner(id,purpose,status,risk_level,created_at,metadata, ai_models(name))',
     )
     .eq('organization_id', orgId)
     .order('created_at', { ascending: false })
@@ -63,6 +66,7 @@ export async function listApprovals(): Promise<ApprovalItem[]> {
       status: row.status,
       note: row.note,
       created_at: row.created_at,
+      expires_at: row.expires_at ?? null,
       decided_at: row.decided_at,
       request: {
         id: request?.id ?? '',

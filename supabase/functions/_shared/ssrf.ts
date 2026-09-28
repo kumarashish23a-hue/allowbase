@@ -12,9 +12,17 @@
 // connected (ai-provider) and on every gateway call (ai-gateway), so stored
 // URLs that predate the check are still rejected.
 //
-// Residual risk (documented, not fixed here): DNS rebinding — a hostname that
-// resolves to a public IP at connect time but a private IP at fetch time.
-// Fully closing that needs resolve-then-pin per request.
+// isSafeProviderUrlAsync adds resolve-then-check: the hostname is resolved at
+// request time and EVERY resolved IP must pass the blocklist. This closes the
+// "DNS changed since connect time" hole.
+//
+// Residual risk (documented, not fixed here): true DNS rebinding in the tiny
+// window between this resolution and fetch() — fetch() has no dialer override
+// to pin the resolved IP while keeping TLS SNI for the original hostname, so
+// a hostile DNS server that answers differently per query can still slip a
+// private IP into the actual connection. When Deno.resolveDns is unavailable
+// in the runtime, the async check falls back to the sync verdict (same
+// residual, explicitly).
 
 function ipv4ToInt(ip: string): number | null {
   const parts = ip.split('.');
@@ -98,4 +106,60 @@ export function isSafeProviderUrl(raw: string): boolean {
   if (!host || BLOCKED_HOSTS.has(host) || host.endsWith('.localhost')) return false;
   if (isBlockedIpLiteral(host)) return false;
   return true;
+}
+
+type DenoWithDns = {
+  resolveDns?: (query: string, recordType: 'A' | 'AAAA') => Promise<string[]>;
+};
+
+/**
+ * Resolve a hostname to its A/AAAA records. Returns null when DNS resolution
+ * is unavailable in this runtime (Deno.resolveDns missing) or fails, so
+ * callers can fall back to the sync check instead of failing open or closed
+ * on a platform limitation. Bounded by DNS_TIMEOUT_MS so a hanging resolver
+ * can never stall the gateway.
+ */
+const DNS_TIMEOUT_MS = 2500;
+
+async function resolveHostIps(host: string): Promise<string[] | null> {
+  try {
+    const deno = (globalThis as unknown as { Deno?: DenoWithDns }).Deno;
+    const resolveDns = deno?.resolveDns;
+    if (typeof resolveDns !== 'function') return null;
+    const lookup = (async () => {
+      const [a, aaaa] = await Promise.all([
+        resolveDns(host, 'A').catch(() => [] as string[]),
+        resolveDns(host, 'AAAA').catch(() => [] as string[]),
+      ]);
+      return [...a, ...aaaa];
+    })();
+    const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), DNS_TIMEOUT_MS));
+    return await Promise.race([lookup, timeout]);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Async SSRF check: the sync verdict PLUS resolve-then-check — every IP the
+ * hostname currently resolves to must pass the blocklist. IP literals need
+ * no resolution (the sync pass already judged them).
+ *
+ * When DNS is unavailable in the runtime, the sync verdict stands and the
+ * DNS-rebinding residual documented at the top of this module applies.
+ */
+export async function isSafeProviderUrlAsync(raw: string): Promise<boolean> {
+  if (!isSafeProviderUrl(raw)) return false;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  const host = url.hostname.toLowerCase();
+  if (ipv4ToInt(host) !== null || host.includes(':')) return true; // literal, already judged
+  const ips = await resolveHostIps(host);
+  if (ips === null) return true; // no DNS in this runtime — sync verdict stands
+  if (ips.length === 0) return false; // unresolvable host — refuse
+  return ips.every((ip) => !isBlockedIpLiteral(ip));
 }

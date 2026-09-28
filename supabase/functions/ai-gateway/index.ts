@@ -38,7 +38,7 @@ import { checkEndpointRateLimit, rateLimitedResponse } from '../_shared/rateLimi
 import { recordMetric, nowMs } from '../_shared/metrics.ts';
 import { decryptSecret } from '../_shared/providerCrypto.ts';
 import { extractApiKey, sha256Hex, verifyApiKeyForScope } from '../_shared/apiKeys.ts';
-import { isSafeProviderUrl } from '../_shared/ssrf.ts';
+import { isSafeProviderUrlAsync } from '../_shared/ssrf.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -359,11 +359,40 @@ serve(async (req: Request): Promise<Response> => {
       })
       .select('id')
       .single();
-    if (modelError || !created) return json({ error: 'Could not register the AI model.' }, 500);
-    modelId = (created as { id: string }).id;
+    if (modelError || !created) {
+      // 23505: a concurrent request registered the same model first (the
+      // uq_ai_models_org_provider_name constraint from 026). Re-read the
+      // winner instead of failing the request.
+      if ((modelError as { code?: string })?.code === '23505') {
+        const { data: raced } = await admin
+          .from('ai_models')
+          .select('id')
+          .eq('organization_id', organization_id)
+          .eq('provider', conn.provider)
+          .eq('name', model)
+          .maybeSingle();
+        if (raced) {
+          modelId = (raced as { id: string }).id;
+        } else {
+          return json({ error: 'Could not register the AI model.' }, 500);
+        }
+      } else {
+        return json({ error: 'Could not register the AI model.' }, 500);
+      }
+    } else {
+      modelId = (created as { id: string }).id;
+    }
   }
 
   // 5. Evaluate policies through the secure evaluator.
+  //    Lazy approval expiry (no pg_cron): sweep stale approvals best-effort
+  //    before every evaluation. decide_approval sweeps again itself, so an
+  //    expired approval can never be decided even if this sweep fails.
+  try {
+    await admin.rpc('expire_stale_approvals');
+  } catch {
+    /* hygiene only — never fail the request */
+  }
   //    Machine callers go through the service-role wrapper
   //    evaluate_gateway_request, which re-verifies the key and stamps the
   //    transaction-local app.api_key_id trust marker the evaluator requires.
@@ -463,8 +492,10 @@ serve(async (req: Request): Promise<Response> => {
   try {
     // Re-validate the stored URL on every call, not just at connect time:
     // the row may predate the SSRF check, or the check may have tightened.
+    // The async check resolves the hostname and refuses when ANY resolved
+    // IP is private/loopback/link-local (resolve-then-check).
     const storedBase = (conn.base_url as string | null) ?? null;
-    if (provider === 'custom' && storedBase && !isSafeProviderUrl(storedBase)) {
+    if (provider === 'custom' && storedBase && !(await isSafeProviderUrlAsync(storedBase))) {
       meter('error', 'unsafe_base_url');
       return json(
         { error: 'The stored provider URL failed the safety check. Reconnect the provider with a public https URL.' },

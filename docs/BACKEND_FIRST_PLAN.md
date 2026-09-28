@@ -42,7 +42,15 @@ Core milestone already works: PUBLIC→ALLOW, PII→MASK, API KEY→BLOCK, all s
 
 **Done when:** 6 categories detected deterministically; a policy can block on `threat.category`; findings carry no raw content; tests green.
 
-## Phase B — Quick wins (one build, three holes closed)
+## Phase B — Quick wins ✅ SHIPPED 2026-09-28 (commit pending)
+
+~~(one build, three holes closed)~~ All three closed.
+
+- **B1 — Approval expiry**: `026_phase_b_quick_wins.sql` adds `approval_requests.expires_at` (default now()+24h) + `expire_stale_approvals()` (flips overdue pendings to `expired`, fails linked AI requests closed to `blocked`, writes a system audit row per expiry). Lazy expiry, no pg_cron: `decide_approval` sweeps before every decision and refuses expired approvals; ai-gateway + evaluate-ai-request sweep best-effort before each evaluation. Approvals tab shows the expiry timestamp (display only).
+- **B2 — SSRF DNS pinning**: `_shared/ssrf.ts` gains `isSafeProviderUrlAsync()` — sync verdict plus resolve-then-check (every resolved A/AAAA IP must pass the blocklist), 2.5s-bounded, used by ai-gateway on every custom-provider fetch. `Deno.resolveDns` availability in the Supabase edge runtime could not be verified from here: when unavailable it falls back to the sync verdict (same protection as before, no regression). Residual honest risk: true DNS-rebinding TOCTOU between resolve and fetch (fetch has no dialer override for IP pinning with TLS SNI) — documented in the module header.
+- **B3 — Duplicate model registration**: unique constraint `uq_ai_models_org_provider_name` on `(organization_id, provider, name)` after deduping (keeps earliest-created; referencing rows are `on delete set null`). Gateway's register path retries the lookup on 23505 so concurrent first-calls converge on one row.
+
+**Tests:** `scripts/verify-phaseb.mjs` — 27 assertions green (SSRF unit incl. injected fake DNS + no-DNS fallback; PGlite: expiry sweep, decide refusal, fail-closed request, audit row, constraint + 23505).
 
 **B1 — Approval expiry** (the `expired` status is currently dead code):
 - Migration `026_approval_expiry.sql`: `approval_requests.expires_at timestamptz NOT NULL DEFAULT now() + interval '24 hours'`; SQL function `expire_stale_approvals()`; edge functions invoke it before honoring any approval (lazy expiry — no pg_cron dependency); expired approvals cannot be approved and the gateway treats them as denied.

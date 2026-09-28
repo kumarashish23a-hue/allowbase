@@ -134,6 +134,7 @@ export function Approvals() {
                               <p className="text-base font-semibold text-mist-100">{item.request.purpose}</p>
                               <p className="mt-1 text-xs text-mist-500">
                                 {item.request.model ?? 'Unknown model'} · requested {formatDate(item.request.created_at)}
+                                {item.expires_at ? ` · expires ${formatDate(item.expires_at)}` : ''}
                               </p>
                             </div>
                             <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold tracking-[0.12em] ${statusTone.pending}`}>
