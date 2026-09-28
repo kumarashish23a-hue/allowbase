@@ -8,7 +8,7 @@
 //     returns jsonb {"allowed": bool, "retry_after_seconds": int,
 //                    "limit": int, "count": int}
 
-export type RateLimitedEndpoint = 'ingest-event' | 'evaluate-ai-request' | 'ai-gateway' | 'rag-ingest' | 'rag-retrieve';
+export type RateLimitedEndpoint = 'ingest-event' | 'evaluate-ai-request' | 'ai-gateway' | 'rag-ingest' | 'rag-retrieve' | 'mcp-gateway';
 
 export interface RateLimitDecision {
   allowed: boolean;
@@ -27,6 +27,7 @@ const FALLBACK_LIMITS: Record<RateLimitedEndpoint, { max: number; windowSeconds:
   'ai-gateway': { max: 120, windowSeconds: 60 },
   'rag-ingest': { max: 60, windowSeconds: 60 },
   'rag-retrieve': { max: 120, windowSeconds: 60 },
+  'mcp-gateway': { max: 120, windowSeconds: 60 },
 };
 
 /**
