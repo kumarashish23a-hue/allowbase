@@ -13,3 +13,11 @@ verify_jwt = true
 [functions.ingest-event]
 enabled = true
 verify_jwt = false
+
+# AI gateway: accepts EITHER a Supabase user JWT (console use) OR a machine
+# API key with the 'gateway' scope (x-api-key header). The platform JWT check
+# must stay off or it rejects every machine call before our own auth runs —
+# the function enforces authentication itself (see index.ts step 1).
+[functions.ai-gateway]
+enabled = true
+verify_jwt = false

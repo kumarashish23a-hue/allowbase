@@ -24,6 +24,7 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
 import { encryptSecret } from '../_shared/providerCrypto.ts';
+import { isSafeProviderUrl } from '../_shared/ssrf.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -143,8 +144,14 @@ serve(async (req: Request): Promise<Response> => {
     }
     let base_url: string | null = null;
     if (provider === 'custom') {
-      if (typeof body.base_url !== 'string' || !/^https:\/\/[a-zA-Z0-9.-]{1,253}(:\d{1,5})?(\/.*)?$/.test(body.base_url)) {
-        return json({ error: 'base_url must be an https URL for the custom provider.' }, 400);
+      // SSRF: the gateway later fetches this URL with the decrypted provider
+      // key attached. Only public https targets — no private, loopback,
+      // link-local, or metadata addresses. Re-validated on every gateway call.
+      if (typeof body.base_url !== 'string' || !isSafeProviderUrl(body.base_url)) {
+        return json(
+          { error: 'base_url must be a public https URL. Private, loopback, link-local, and metadata addresses are blocked.' },
+          400,
+        );
       }
       base_url = body.base_url.replace(/\/$/, '');
     }

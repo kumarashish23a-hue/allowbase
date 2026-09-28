@@ -183,4 +183,73 @@ try {
 }
 expect(viewerBlocked, 'viewer cannot mint a gateway key (42501)');
 
+// ---- Migration 024: evaluate_gateway_request wrapper + grant tightening ----
+
+const CLAUDE_MODEL = 'f0000000-0000-4000-8000-000000000002'; // seeded in ORG
+
+// 12. The wrapper authenticates a gateway key and evaluates WITHOUT a user
+//     session (auth.uid() is null here) — the app.api_key_id stamp replaces
+//     the membership check. This is the exact call the edge function makes.
+const wrap = await db.query(
+  `select public.evaluate_gateway_request('${bothHash}', '${ORG}', '${CLAUDE_MODEL}', 'wrapper test', '{}', null, 'chat', '[]') as r`,
+);
+const decision = wrap.rows[0].r.decision;
+expect(
+  ['allow', 'block', 'review'].includes(decision),
+  `evaluate_gateway_request evaluates for a machine key (decision=${decision})`,
+);
+
+// 13. The wrapper rejects a key bound to a different organization (28000).
+let wrapWrongOrg = false;
+try {
+  await db.query(
+    `select public.evaluate_gateway_request('${bothHash}', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '${CLAUDE_MODEL}', 'x', '{}', null, 'chat', '[]')`,
+  );
+} catch (error) {
+  wrapWrongOrg = error.code === '28000';
+}
+expect(wrapWrongOrg, 'evaluate_gateway_request rejects cross-org key use (28000)');
+
+// 14. The wrapper rejects a revoked key (28000).
+let wrapRevoked = false;
+try {
+  await db.query(
+    `select public.evaluate_gateway_request('${gwHash}', '${ORG}', '${CLAUDE_MODEL}', 'x', '{}', null, 'chat', '[]')`,
+  );
+} catch (error) {
+  wrapRevoked = error.code === '28000';
+}
+expect(wrapRevoked, 'evaluate_gateway_request rejects revoked key (28000)');
+
+// 15. check_rate_limit is no longer executable by anon/authenticated/PUBLIC.
+// (Postgres grants EXECUTE on new functions to PUBLIC by default, and every
+// role is implicitly in PUBLIC — revoking only the named roles would not
+// have closed the hole.)
+const grants = await db.query(`
+  select grantee from information_schema.role_routine_grants
+  where routine_schema = 'public' and routine_name = 'check_rate_limit'
+`);
+const grantees = grants.rows.map((r) => r.grantee);
+expect(
+  grantees.includes('service_role') &&
+    !grantees.includes('anon') &&
+    !grantees.includes('authenticated') &&
+    !grantees.includes('PUBLIC'),
+  `check_rate_limit closed to anon/authenticated/PUBLIC (now: ${grantees.join(',') || 'none'})`,
+);
+
+// 16. evaluate_gateway_request is executable only by service_role (+ owner).
+const wrapGrants = await db.query(`
+  select grantee from information_schema.role_routine_grants
+  where routine_schema = 'public' and routine_name = 'evaluate_gateway_request'
+`);
+const wrapGrantees = wrapGrants.rows.map((r) => r.grantee);
+expect(
+  wrapGrantees.includes('service_role') &&
+    !wrapGrantees.includes('anon') &&
+    !wrapGrantees.includes('authenticated') &&
+    !wrapGrantees.includes('PUBLIC'),
+  `evaluate_gateway_request closed to anon/authenticated/PUBLIC (now: ${wrapGrantees.join(',') || 'none'})`,
+);
+
 console.log(process.exitCode ? 'FAIL some assertions failed' : 'ok   all gateway key assertions passed');

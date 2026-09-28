@@ -42,29 +42,43 @@ export function extractApiKey(req: Request): string {
   return apiKey;
 }
 
-interface VerifyRpcClient {
-  rpc(
-    fn: 'verify_api_key',
-    args: { p_key_hash: string; p_scope: string },
-  ): Promise<{ data: { key_id: string; organization_id: string } | null; error: unknown }>;
-}
+import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
+
+export type ApiKeyVerification =
+  | { ok: true; key: VerifiedApiKey }
+  | { ok: false; status: 401 | 500 };
 
 /**
  * Verify a key hash for one scope via the verify_api_key RPC.
- * Returns the key identity on success, null when the key is missing,
- * revoked, expired, or lacks the scope. Never throws for caller errors —
- * only for unexpected transport failures (callers should treat those as
- * 500s, not 401s).
+ *
+ * - ok: the key is valid for the scope.
+ * - 401: the key is missing, revoked, expired, or lacks the scope
+ *   (the RPC raises errcode 28000 / 'invalid api key').
+ * - 500: anything else — the RPC itself failed (DB down, permissions).
+ *   Mapping transport failures to 401 would disguise an outage as bad keys.
  */
 export async function verifyApiKeyForScope(
-  client: VerifyRpcClient,
+  client: SupabaseClient,
   keyHash: string,
   scope: 'ingest' | 'gateway',
-): Promise<VerifiedApiKey | null> {
-  const { data, error } = await client.rpc('verify_api_key', {
-    p_key_hash: keyHash,
-    p_scope: scope,
-  });
-  if (error || !data) return null;
-  return { keyId: data.key_id, organizationId: data.organization_id };
+): Promise<ApiKeyVerification> {
+  let data: { key_id: string; organization_id: string } | null;
+  let error: { code?: string; message?: string } | null;
+  try {
+    ({ data, error } = await client.rpc('verify_api_key', {
+      p_key_hash: keyHash,
+      p_scope: scope,
+    }));
+  } catch {
+    return { ok: false, status: 500 };
+  }
+  if (!error && data) {
+    return { ok: true, key: { keyId: data.key_id, organizationId: data.organization_id } };
+  }
+  const code = error?.code ?? '';
+  const message = error?.message ?? '';
+  if (code === '28000' || /invalid api key/i.test(message)) {
+    return { ok: false, status: 401 };
+  }
+  return { ok: false, status: 500 };
 }

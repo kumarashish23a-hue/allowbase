@@ -18,19 +18,7 @@ export interface RateLimitDecision {
   count: number;
 }
 
-interface RpcClient {
-  from(table: string): {
-    select(cols: string): {
-      eq(col: string, val: string): {
-        maybeSingle(): Promise<{ data: { max_requests: number; window_seconds: number } | null; error: unknown }>;
-      };
-    };
-  };
-  rpc(
-    fn: 'check_rate_limit',
-    args: { p_bucket: string; p_max: number; p_window_seconds: number },
-  ): Promise<{ data: { allowed: boolean; retry_after_seconds: number; limit: number; count: number } | null; error: unknown }>;
-}
+import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
 
 /** Tunable defaults when the rate_limit_rules row is missing/unreadable. */
 const FALLBACK_LIMITS: Record<RateLimitedEndpoint, { max: number; windowSeconds: number }> = {
@@ -48,7 +36,7 @@ const FALLBACK_LIMITS: Record<RateLimitedEndpoint, { max: number; windowSeconds:
  * should still record a metric.
  */
 export async function checkEndpointRateLimit(
-  client: RpcClient,
+  client: SupabaseClient,
   endpoint: RateLimitedEndpoint,
   scopeKey: string,
 ): Promise<RateLimitDecision> {

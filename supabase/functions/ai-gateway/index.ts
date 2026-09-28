@@ -31,11 +31,13 @@
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
+import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.44.4';
 import { detectSensitiveContent, maskSensitiveContent, hasCriticalFinding, DETECTOR_VERSION } from '../_shared/detect.ts';
 import { checkEndpointRateLimit, rateLimitedResponse } from '../_shared/rateLimit.ts';
 import { recordMetric, nowMs } from '../_shared/metrics.ts';
 import { decryptSecret } from '../_shared/providerCrypto.ts';
 import { extractApiKey, sha256Hex, verifyApiKeyForScope } from '../_shared/apiKeys.ts';
+import { isSafeProviderUrl } from '../_shared/ssrf.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -64,9 +66,13 @@ interface GatewayMessage {
   content: string;
 }
 
-function validate(body: Record<string, unknown>): string | null {
-  if (!body.organization_id || typeof body.organization_id !== 'string' || !UUID_RE.test(body.organization_id)) {
-    return 'organization_id must be a UUID.';
+function validate(body: Record<string, unknown>, requireOrg: boolean): string | null {
+  if (requireOrg) {
+    // Human (JWT) callers must name the organization they act on.
+    // Machine callers are bound to the key's organization instead.
+    if (!body.organization_id || typeof body.organization_id !== 'string' || !UUID_RE.test(body.organization_id)) {
+      return 'organization_id must be a UUID.';
+    }
   }
   if (!body.provider || typeof body.provider !== 'string' || !(PROVIDERS as readonly string[]).includes(body.provider)) {
     return `provider must be one of: ${PROVIDERS.join(', ')}.`;
@@ -199,19 +205,26 @@ serve(async (req: Request): Promise<Response> => {
 
   // 1. Authenticate the caller: a machine API key (x-api-key header carrying a
   //    key with the 'gateway' scope) or a Supabase user session. An API key
-  //    authenticates the *organization* — the request body must name the
-  //    key's organization (checked below), so a key can never act on another
-  //    org. (JWTs never start with dcp_, so the two credentials never collide.)
+  //    authenticates the *organization* — the key's organization is
+  //    authoritative and any body organization_id is ignored, so a key can
+  //    never act on another org. (JWTs never start with dcp_, so the two
+  //    credentials never collide.)
   const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
 
   let apiKeyHash: string | null = null;
   let keyOrganizationId: string | null = null;
+  // Set on the JWT path only; the machine-key path never touches it.
+  let userClient: SupabaseClient | null = null;
   const rawApiKey = extractApiKey(req);
   if (rawApiKey) {
     apiKeyHash = await sha256Hex(rawApiKey);
     const verified = await verifyApiKeyForScope(admin, apiKeyHash, 'gateway');
-    if (!verified) return json({ error: 'Invalid API key.' }, 401);
-    keyOrganizationId = verified.organizationId;
+    if (!verified.ok) {
+      // 401 = bad key; 500 = our own verification broke (never disguise an
+      // outage as a bad key).
+      return json({ error: verified.status === 401 ? 'Invalid API key.' : 'Key verification failed.' }, verified.status);
+    }
+    keyOrganizationId = verified.key.organizationId;
   }
 
   let body: Record<string, unknown>;
@@ -220,35 +233,34 @@ serve(async (req: Request): Promise<Response> => {
   } catch {
     return json({ error: 'Request body must be valid JSON.' }, 400);
   }
-  const validationError = validate(body);
+  const validationError = validate(body, !keyOrganizationId);
   if (validationError) return json({ error: validationError }, 400);
 
-  const organization_id = body.organization_id as string;
+  // The key's organization is authoritative; the body field exists only for
+  // the JWT path and is ignored for machine callers.
+  const organization_id = keyOrganizationId ?? (body.organization_id as string);
 
-  if (keyOrganizationId) {
-    // Machine caller: the body must name the key's own organization.
-    if (organization_id !== keyOrganizationId) {
-      return json({ error: 'Organization mismatch.' }, 403);
-    }
-  } else {
+  if (!keyOrganizationId) {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) return json({ error: 'Missing authorization.' }, 401);
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+    const jwtClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
       auth: { persistSession: false },
     });
+    userClient = jwtClient;
     const {
       data: { user },
       error: userError,
-    } = await userClient.auth.getUser();
+    } = await jwtClient.auth.getUser();
     if (userError || !user) return json({ error: 'Invalid or expired session.' }, 401);
 
-    // Any active member may call the gateway; policies decide what happens.
-    const { data: isMember, error: memberError } = await userClient.rpc('has_org_role', {
+    // Calling the gateway spends real provider quota, so viewers and
+    // analysts are excluded — same posture as connecting a provider.
+    const { data: isMember, error: memberError } = await jwtClient.rpc('has_org_role', {
       org_id: organization_id,
-      allowed: ['owner', 'admin', 'security', 'developer', 'analyst', 'viewer'],
+      allowed: ['owner', 'admin', 'security', 'developer'],
     });
-    if (memberError || !isMember) return json({ error: 'Not a member of this organization.' }, 403);
+    if (memberError || !isMember) return json({ error: 'Not authorized to use the gateway.' }, 403);
   }
 
   const provider = body.provider as string;
@@ -315,13 +327,15 @@ serve(async (req: Request): Promise<Response> => {
   const detections = detectSensitiveContent(scanText);
 
   // 4. Register the model in the workspace if it is new (external, unapproved
-  // by default — policies decide whether it may be used).
+  // by default — policies decide whether it may be used). Matched on the
+  // provider *id* (openai / anthropic / …), never the display label, so
+  // ai.provider policies hit the same rows the gateway registers.
   let modelId: string | null = null;
   const { data: existingModel } = await admin
     .from('ai_models')
     .select('id')
     .eq('organization_id', organization_id)
-    .eq('provider', conn.label)
+    .eq('provider', conn.provider)
     .eq('name', model)
     .maybeSingle();
   if (existingModel) {
@@ -332,7 +346,7 @@ serve(async (req: Request): Promise<Response> => {
       .insert({
         organization_id,
         name: model,
-        provider: conn.label,
+        provider: conn.provider,
         model_identifier: model,
         model_type: 'chat',
         is_external: true,
@@ -346,16 +360,41 @@ serve(async (req: Request): Promise<Response> => {
     modelId = (created as { id: string }).id;
   }
 
-  // 5. Evaluate policies (same secure path as the evaluate API).
-  const { data: result, error: rpcError } = await userClient.rpc('evaluate_ai_request', {
-    p_organization_id: organization_id,
-    p_ai_model_id: modelId,
-    p_purpose: purpose,
-    p_data_asset_ids: data_asset_ids,
-    p_agent_id: agent_id,
-    p_request_type: 'chat',
-    p_content_findings: detections,
-  });
+  // 5. Evaluate policies through the secure evaluator.
+  //    Machine callers go through the service-role wrapper
+  //    evaluate_gateway_request, which re-verifies the key and stamps the
+  //    transaction-local app.api_key_id trust marker the evaluator requires.
+  //    Never call evaluate_ai_request as service_role without that stamp —
+  //    service_role has no auth.uid(), so the membership check would 42501.
+  //    Human callers call evaluate_ai_request as themselves, so the
+  //    evaluator's is_org_member check runs against their verified JWT.
+  let result: unknown;
+  let rpcError: { code?: string; message?: string } | null;
+  if (keyOrganizationId && apiKeyHash) {
+    ({ data: result, error: rpcError } = await admin.rpc('evaluate_gateway_request', {
+      p_key_hash: apiKeyHash,
+      p_organization_id: organization_id,
+      p_ai_model_id: modelId,
+      p_purpose: purpose,
+      p_data_asset_ids: data_asset_ids,
+      p_agent_id: agent_id,
+      p_request_type: 'chat',
+      p_content_findings: detections,
+    }));
+  } else if (userClient) {
+    ({ data: result, error: rpcError } = await userClient.rpc('evaluate_ai_request', {
+      p_organization_id: organization_id,
+      p_ai_model_id: modelId,
+      p_purpose: purpose,
+      p_data_asset_ids: data_asset_ids,
+      p_agent_id: agent_id,
+      p_request_type: 'chat',
+      p_content_findings: detections,
+    }));
+  } else {
+    // Unreachable: auth above guarantees one of the two paths.
+    return json({ error: 'Not authenticated.' }, 401);
+  }
   if (rpcError) {
     const status = rpcError.code === '42501' ? 403 : 500;
     meter(status === 500 ? 'error' : 'ok', status === 500 ? 'policy_eval_error' : 'not_member');
@@ -419,7 +458,17 @@ serve(async (req: Request): Promise<Response> => {
 
   let providerResult: ProviderCall;
   try {
-    providerResult = await callProvider(provider, (conn.base_url as string | null) ?? null, apiKey, model, outgoing);
+    // Re-validate the stored URL on every call, not just at connect time:
+    // the row may predate the SSRF check, or the check may have tightened.
+    const storedBase = (conn.base_url as string | null) ?? null;
+    if (provider === 'custom' && storedBase && !isSafeProviderUrl(storedBase)) {
+      meter('error', 'unsafe_base_url');
+      return json(
+        { error: 'The stored provider URL failed the safety check. Reconnect the provider with a public https URL.' },
+        500,
+      );
+    }
+    providerResult = await callProvider(provider, storedBase, apiKey, model, outgoing);
   } catch (error) {
     // Never leak the key or raw provider internals — status line only.
     meter('error', 'provider_error');
