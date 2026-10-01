@@ -18,12 +18,92 @@ export async function getMyOrganizations(): Promise<OrganizationRow[]> {
 
 /** Create an organization and become its owner (server-side RPC). */
 export async function createOrganization(name: string): Promise<string> {
+  const trimmedName = name.trim();
+  if (!trimmedName) throw new Error('Organization name is required.');
+  if (trimmedName.length > 120) throw new Error('Organization name must be 120 characters or fewer.');
   const supabase = getSupabase();
   if (!supabase) throw new Error('Supabase is not configured.');
-  const { data, error } = await supabase.rpc('create_organization', { p_name: name });
+  const { data, error } = await supabase.rpc('create_organization', { p_name: trimmedName });
   if (error) throw new Error('Could not create the organization.');
   clearOrgCache();
   return data as string;
+}
+
+export interface PendingOnboarding {
+  email: string;
+  fullName: string;
+  jobTitle: string;
+  department: string;
+  organizationName: string;
+  industry: string;
+}
+
+const PENDING_ONBOARDING_KEY = 'allowbase.pending-onboarding';
+
+/** Store only non-secret onboarding fields while email confirmation is pending. */
+export function savePendingOnboarding(draft: PendingOnboarding): void {
+  try {
+    window.localStorage.setItem(PENDING_ONBOARDING_KEY, JSON.stringify(draft));
+  } catch {
+    // Private browsing/storage-disabled environments can still finish setup manually.
+  }
+}
+
+export function getPendingOnboarding(email: string): PendingOnboarding | null {
+  try {
+    const raw = window.localStorage.getItem(PENDING_ONBOARDING_KEY);
+    if (!raw) return null;
+    const draft = JSON.parse(raw) as Partial<PendingOnboarding>;
+    if (draft.email?.trim().toLowerCase() !== email.trim().toLowerCase()) return null;
+    if (!draft.organizationName?.trim()) return null;
+    return {
+      email: draft.email.trim(),
+      fullName: draft.fullName?.trim() ?? '',
+      jobTitle: draft.jobTitle?.trim() ?? '',
+      department: draft.department?.trim() ?? '',
+      organizationName: draft.organizationName.trim(),
+      industry: draft.industry?.trim() ?? '',
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function clearPendingOnboarding(): void {
+  try {
+    window.localStorage.removeItem(PENDING_ONBOARDING_KEY);
+  } catch {
+    /* storage is optional */
+  }
+}
+
+/** Apply the signed-up user's profile and create their first workspace once authenticated. */
+export async function completeOnboarding(draft: PendingOnboarding): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Your session expired. Sign in again.');
+
+  const { error: profileError } = await supabase
+    .from('profiles')
+    .update({
+      full_name: draft.fullName || null,
+      job_title: draft.jobTitle || null,
+      department: draft.department || null,
+    })
+    .eq('id', user.id);
+  if (profileError) throw new Error('Could not save your profile details.');
+
+  let organization = await getActiveOrganization();
+  if (!organization) {
+    const organizationId = await createOrganization(draft.organizationName);
+    if (draft.industry) await setOrgIndustry(organizationId, draft.industry);
+  } else if (draft.industry) {
+    await setOrgIndustry(organization.id, draft.industry);
+  }
+  clearPendingOnboarding();
 }
 
 /** Convenience: the organization the app should scope queries to. */

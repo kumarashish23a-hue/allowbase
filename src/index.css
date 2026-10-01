@@ -207,6 +207,93 @@ body {
   background: transparent;
 }
 
+/* Lightweight animated ambient backdrop for the hero. */
+.ambient-backdrop {
+  isolation: isolate;
+  background: var(--ambient-base);
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 52%, transparent 88%);
+  mask-image: linear-gradient(to bottom, black 0%, black 52%, transparent 88%);
+}
+
+.ambient-backdrop__wash,
+.ambient-backdrop__orb,
+.ambient-backdrop__grid,
+.ambient-backdrop__horizon {
+  position: absolute;
+  inset: 0;
+}
+
+.ambient-backdrop__wash {
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 4%, color-mix(in srgb, var(--ambient-accent) 13%, transparent), transparent 70%),
+    radial-gradient(ellipse 45% 55% at 92% 20%, color-mix(in srgb, var(--ambient-accent) 7%, transparent), transparent 72%),
+    radial-gradient(ellipse 45% 50% at 8% 34%, color-mix(in srgb, var(--ambient-accent) 5%, transparent), transparent 74%);
+}
+
+.ambient-backdrop__orb {
+  inset: auto;
+  width: min(42vw, 520px);
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background: var(--ambient-accent);
+  filter: blur(76px);
+  opacity: 0.11;
+  transform: translate3d(0, 0, 0);
+  animation: ambient-drift 18s ease-in-out infinite alternate;
+}
+
+.ambient-backdrop__orb--primary {
+  top: -18%;
+  left: 18%;
+}
+
+.ambient-backdrop__orb--secondary {
+  top: 8%;
+  right: 8%;
+  width: min(28vw, 360px);
+  opacity: 0.075;
+  animation-duration: 24s;
+  animation-delay: -8s;
+}
+
+.ambient-backdrop__grid {
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--ambient-accent) 10%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--ambient-accent) 10%, transparent) 1px, transparent 1px);
+  background-size: 64px 64px;
+  opacity: 0.26;
+  transform: perspective(900px) rotateX(55deg) scale(1.6) translateY(18%);
+  transform-origin: center bottom;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 22%, black 62%, transparent 94%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 22%, black 62%, transparent 94%);
+}
+
+.ambient-backdrop__horizon {
+  inset: auto 0 18%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ambient-accent) 20%, transparent), transparent);
+  opacity: 0.7;
+  filter: blur(0.5px);
+}
+
+@keyframes ambient-drift {
+  0% {
+    transform: translate3d(-5%, -3%, 0) scale(0.92);
+  }
+  50% {
+    transform: translate3d(8%, 5%, 0) scale(1.06);
+  }
+  100% {
+    transform: translate3d(18%, -2%, 0) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-backdrop__orb {
+    animation: none;
+  }
+}
+
 /* Extremely subtle infrastructure grid for hero/backdrop use. */
 .bg-blueprint-grid {
   background-image:
