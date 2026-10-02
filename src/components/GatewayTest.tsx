@@ -71,16 +71,16 @@ export function GatewayTest() {
   if (!isSupabaseConfigured()) return null;
 
   return (
-    <section aria-label="Test the AI gateway" className="mt-2">
+    <section aria-label="Protect an AI request" className="mt-2">
       <SectionHeading
-        eyebrow="Connections"
-        title="Test the AI gateway"
-        description="Send one prompt through the full pipeline: policy evaluation first, provider call only when allowed. This is a test surface — apps use their own API keys."
+        eyebrow="AI Gateway"
+        title="Protect an AI request"
+        description="Send a real prompt through AllowBase: inspect it, evaluate policy, mask or block sensitive content, and call the provider only when allowed."
       />
       <div className="mt-4 rounded-xl border border-line bg-ink-950/60 p-4">
         {connections.length === 0 ? (
           <p className="text-sm text-mist-500">
-            Connect a provider above to test the gateway.
+            Connect an AI provider below to activate the gateway. Provider keys are encrypted server-side and are never returned to the browser.
           </p>
         ) : (
           <>
@@ -136,7 +136,7 @@ export function GatewayTest() {
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 rows={3}
-                placeholder="Ask something — try pasting an email address to trigger masking…"
+                placeholder="Try a normal request, or paste a test email address to see detection…"
                 className="mt-1.5 w-full rounded-xl border border-line bg-ink-900 px-3 py-2.5 text-sm text-mist-100 outline-none placeholder:text-mist-600 focus:border-accent-400/60"
               />
             </label>
@@ -147,7 +147,7 @@ export function GatewayTest() {
               className="mt-3 flex items-center gap-2 rounded-xl bg-accent-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-accent-400 disabled:opacity-50"
             >
               {sending ? <FlaskConical size={14} className="animate-pulse" /> : <Send size={14} />}
-              {sending ? 'Evaluating…' : 'Send through gateway'}
+              {sending ? 'Protecting…' : 'Protect this request'}
             </button>
           </>
         )}

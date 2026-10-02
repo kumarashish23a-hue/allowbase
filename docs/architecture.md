@@ -1,6 +1,7 @@
 # Data Control Plane — Working Architecture
 
-*Based on inspection of the actual deployed implementation (frontend `2d2d498` lineage, Supabase backend migrations `001–009`, Edge Function `evaluate-ai-request`, Vercel deployment). Nothing below is assumed — every claim traces to code that was read. For the security-foundation assessment (migrations `010–012`, content detection), see `docs/ARCHITECTURE_ASSESSMENT.md`, `docs/GAP_ANALYSIS.md`, and `docs/IMPLEMENTATION_PLAN.md`.*
+*Current implementation note: this document began from the early `001–009` implementation, but the repository now includes migrations `001–030`, the AI gateway, content/threat detection, streaming inspection, tokenization, RAG security, MCP security, and agent guardrails. Use the source code and latest migrations as authoritative where this historical assessment differs. The frontend's primary protected flow is now the AI Gateway; the metadata simulator remains available as a separate test surface.*
+
 
 ---
 

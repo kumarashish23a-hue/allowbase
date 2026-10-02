@@ -9,6 +9,7 @@ import {
   Settings,
   ShieldCheck,
   Users,
+  Zap,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -38,6 +39,7 @@ interface ConsoleProps {
 
 const tabs = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'gateway', label: 'AI Gateway', icon: Zap },
   { id: 'connections', label: 'Connections', icon: Plug },
   { id: 'policies', label: 'Policies', icon: ShieldCheck },
   { id: 'events', label: 'Security Events', icon: Activity },
@@ -103,24 +105,24 @@ function DashboardTab({ onSimulate, goToTab }: { onSimulate: () => void; goToTab
       <div className="mb-6 grid gap-3 sm:grid-cols-3">
         <button
           type="button"
+          onClick={() => goToTab('gateway')}
+          className="flex items-center gap-3 rounded-xl border border-accent-400/40 bg-accent-500/10 p-4 text-left transition hover:border-accent-400/70"
+        >
+          <Zap size={18} className="shrink-0 text-accent-400" />
+          <span>
+            <span className="block text-sm font-semibold text-mist-100">Protect an AI request</span>
+            <span className="block text-xs text-mist-500">Evaluate, mask, or block it before the provider sees it.</span>
+          </span>
+        </button>
+        <button
+          type="button"
           onClick={onSimulate}
           className="flex items-center gap-3 rounded-xl border border-line bg-ink-950/60 p-4 text-left transition hover:border-line-strong"
         >
           <FlaskConical size={18} className="shrink-0 text-accent-400" />
           <span>
-            <span className="block text-sm font-semibold text-mist-100">Test a request</span>
-            <span className="block text-xs text-mist-500">Run the simulator against live policies.</span>
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => goToTab('connections')}
-          className="flex items-center gap-3 rounded-xl border border-line bg-ink-950/60 p-4 text-left transition hover:border-line-strong"
-        >
-          <Plug size={18} className="shrink-0 text-accent-400" />
-          <span>
-            <span className="block text-sm font-semibold text-mist-100">Connect data</span>
-            <span className="block text-xs text-mist-500">Sources, agents and API keys.</span>
+            <span className="block text-sm font-semibold text-mist-100">Test a policy decision</span>
+            <span className="block text-xs text-mist-500">Run the metadata simulator against live policies.</span>
           </span>
         </button>
         <button
@@ -382,10 +384,15 @@ export function Console({ onSimulate }: ConsoleProps) {
 
         <div className="min-w-0 flex-1">
           {tab === 'dashboard' && <DashboardTab onSimulate={onSimulate} goToTab={goToTab} />}
-          {tab === 'connections' && (
-            <div className="space-y-2">
-              <ProviderConnections />
+          {tab === 'gateway' && (
+            <div className="space-y-8">
               <GatewayTest />
+              <ProviderConnections />
+            </div>
+          )}
+          {tab === 'connections' && (
+            <div className="space-y-8">
+              <ProviderConnections />
               <DataSources />
               <Agents />
               <ApiKeys />

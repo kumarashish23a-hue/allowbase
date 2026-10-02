@@ -51,14 +51,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 /** Owner/admin-only control panel: clients, members, policies, agents, API keys. */
 export function Admin() {
-  // Temporary UI lock (demo only): the real security is the owner/admin role
-  // check below plus Supabase RLS. These credentials live in client code.
-  const [unlocked, setUnlocked] = useState(
-    () => sessionStorage.getItem('dcp-admin-unlocked') === '1',
-  );
-  const [loginId, setLoginId] = useState('');
-  const [loginPass, setLoginPass] = useState('');
-  const [loginError, setLoginError] = useState<string | null>(null);
+  // The Supabase session and organization role are the only access gates.
+  // Never add client-side demo credentials to an administrative surface.
   const [gate, setGate] = useState<'loading' | 'denied' | 'allowed'>('loading');
   const [gateError, setGateError] = useState<string | null>(null);
   const [gateRole, setGateRole] = useState<string | null>(null);
@@ -240,55 +234,6 @@ export function Admin() {
       window.setTimeout(() => setCopiedKey(false), 1500);
     });
   };
-
-  if (!unlocked) {
-    return (
-      <div className="mx-auto max-w-md px-4 pt-32 sm:px-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-600">Admin</p>
-        <h1 className="mt-3 text-2xl font-bold tracking-tight text-mist-100">
-          Enter admin credentials
-        </h1>
-        <form
-          className={`mt-6 space-y-4 ${cardCls}`}
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (loginId === 'admin' && loginPass === 'pass') {
-              sessionStorage.setItem('dcp-admin-unlocked', '1');
-              setLoginError(null);
-              setUnlocked(true);
-            } else {
-              setLoginError('Wrong ID or password.');
-            }
-          }}
-        >
-          <Field label="ID">
-            <input
-              autoFocus
-              value={loginId}
-              onChange={(e) => setLoginId(e.target.value)}
-              autoComplete="username"
-              className={inputCls}
-              placeholder="admin"
-            />
-          </Field>
-          <Field label="Password">
-            <input
-              type="password"
-              value={loginPass}
-              onChange={(e) => setLoginPass(e.target.value)}
-              autoComplete="current-password"
-              className={inputCls}
-              placeholder="••••"
-            />
-          </Field>
-          {loginError ? <p className="text-sm text-rose-400">{loginError}</p> : null}
-          <button type="submit" className={`${btnPrimary} w-full`}>
-            Unlock admin panel
-          </button>
-        </form>
-      </div>
-    );
-  }
 
   if (gate === 'loading') {
     return (
