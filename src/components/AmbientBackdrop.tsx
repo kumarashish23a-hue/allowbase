@@ -11,7 +11,7 @@ function toHex(value: number): string {
  * version keeps the same theme-aware API but avoids a large Three.js canvas,
  * GPU spikes, and a blank hero on devices where WebGL is unavailable.
  */
-export function VantaNet({
+export function AmbientBackdrop({
   className = '',
   backgroundColor = 0xedf1f7,
   color = 0x06b6d4,

@@ -32,6 +32,7 @@ import { getSetupStatusSafe, setupConnectComplete } from '../services/setupServi
 import { getActiveOrganization, getMyOrganizationRole } from '../services/organizationService';
 import { getAIRequests, type AIRequestRow } from '../services/aiRequestService';
 import { listApprovals, type ApprovalItem } from '../services/approvalService';
+import { listProviders, type ProviderConnection } from '../services/providerService';
 
 interface ConsoleProps {
   onSimulate: () => void;
@@ -85,16 +86,20 @@ const statusCls: Record<string, string> = {
 function DashboardTab({ onSimulate, goToTab }: { onSimulate: () => void; goToTab: (t: TabId) => void }) {
   const [events, setEvents] = useState<AIRequestRow[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<ApprovalItem[]>([]);
+  const [gatewayProviders, setGatewayProviders] = useState<ProviderConnection[]>([]);
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getAIRequests(5).catch(() => []), listApprovals().catch(() => [])]).then(
-      ([reqs, approvals]) => {
-        if (cancelled) return;
-        setEvents(reqs);
-        setPendingApprovals(approvals.filter((a) => a.status === 'pending'));
-      },
-    );
+    Promise.all([
+      getAIRequests(5).catch(() => []),
+      listApprovals().catch(() => []),
+      listProviders().catch(() => []),
+    ]).then(([reqs, approvals, providers]) => {
+      if (cancelled) return;
+      setEvents(reqs);
+      setPendingApprovals(approvals.filter((a) => a.status === 'pending'));
+      setGatewayProviders(providers.filter((provider) => provider.status === 'active'));
+    });
     return () => {
       cancelled = true;
     };
@@ -102,7 +107,22 @@ function DashboardTab({ onSimulate, goToTab }: { onSimulate: () => void; goToTab
 
   return (
     <div>
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <button
+          type="button"
+          onClick={() => goToTab('gateway')}
+          className="flex items-center gap-3 rounded-xl border border-line bg-ink-950/60 p-4 text-left transition hover:border-line-strong"
+        >
+          <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${gatewayProviders.length > 0 ? 'bg-mint-400' : 'bg-mist-500'}`} />
+          <span>
+            <span className="block text-sm font-semibold text-mist-100">Gateway {gatewayProviders.length > 0 ? 'protected' : 'not connected'}</span>
+            <span className="block text-xs text-mist-500">
+              {gatewayProviders.length > 0
+                ? `${gatewayProviders.map((provider) => provider.label).join(', ')} ready`
+                : 'Connect a provider to protect traffic.'}
+            </span>
+          </span>
+        </button>
         <button
           type="button"
           onClick={() => goToTab('gateway')}

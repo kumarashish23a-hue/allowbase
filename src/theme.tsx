@@ -49,7 +49,7 @@ export function useTheme() {
 }
 
 /** Ambient hero backdrop colors per theme. */
-export const vantaThemeColors: Record<Theme, { background: number; color: number }> = {
+export const ambientThemeColors: Record<Theme, { background: number; color: number }> = {
   light: { background: 0xfaf9f6, color: 0x0f766e },
   dark: { background: 0x080b10, color: 0x22d3ee },
   negative: { background: 0x120e08, color: 0xf9492b },

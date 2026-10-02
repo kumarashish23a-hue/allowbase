@@ -4,10 +4,10 @@ import { Link } from 'react-router-dom';
 import { ArchitectureDiagram } from '../components/ArchitectureDiagram';
 import { DashboardPreview } from '../components/DashboardPreview';
 import { Reveal } from '../components/Reveal';
-import { useTheme, vantaThemeColors } from '../theme';
+import { useTheme, ambientThemeColors } from '../theme';
 
-const VantaNet = lazy(() =>
-  import('../components/VantaNet').then((module) => ({ default: module.VantaNet })),
+const AmbientBackdrop = lazy(() =>
+  import('../components/AmbientBackdrop').then((module) => ({ default: module.AmbientBackdrop })),
 );
 
 const stackCategories = ['LLMs', 'AI Agents', 'Databases', 'Data Warehouses', 'Internal AI', 'APIs'];
@@ -16,16 +16,16 @@ const heroAssurances = ['Metadata-only discovery', 'Deterministic policy engine'
 
 export function Hero() {
   const { theme } = useTheme();
-  const vantaColors = vantaThemeColors[theme];
+  const ambientColors = ambientThemeColors[theme];
 
   return (
     <section id="top" className="relative overflow-hidden pt-14">
       <Suspense fallback={null}>
-        {/* key remounts the canvas so its colors follow the active theme */}
-        <VantaNet
+        {/* key remounts the backdrop so its colors follow the active theme */}
+        <AmbientBackdrop
           key={theme}
-          backgroundColor={vantaColors.background}
-          color={vantaColors.color}
+          backgroundColor={ambientColors.background}
+          color={ambientColors.color}
         />
       </Suspense>
       <div className="relative mx-auto max-w-7xl px-4 pb-16 pt-16 sm:px-6 sm:pt-20 lg:px-8 lg:pb-24 lg:pt-24">

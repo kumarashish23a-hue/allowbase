@@ -107,7 +107,7 @@ export function ProviderConnections() {
   const byId = new Map(connections.map((c) => [c.provider, c]));
 
   return (
-    <section aria-label="AI providers">
+    <section id="ai-providers" aria-label="AI providers">
       <SectionHeading
         eyebrow="Connections"
         title="AI providers"

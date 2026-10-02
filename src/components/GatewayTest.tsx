@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { FlaskConical, Send } from 'lucide-react';
+import { FlaskConical, Send, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { SectionHeading } from './SectionHeading';
 import { isSupabaseConfigured } from '../lib/supabase';
 import {
@@ -16,6 +16,27 @@ const DEFAULT_MODELS: Record<AIProviderId, string> = {
   gemini: 'gemini-2.0-flash',
   custom: 'model',
 };
+
+const EXAMPLES = [
+  {
+    label: 'Safe request',
+    purpose: 'product-summary',
+    prompt: 'Summarize the product roadmap into three concise bullets.',
+    icon: ShieldCheck,
+  },
+  {
+    label: 'PII example',
+    purpose: 'support-draft',
+    prompt: 'Draft a reply to ravi.sharma@example.com about their support ticket.',
+    icon: FlaskConical,
+  },
+  {
+    label: 'Secret example',
+    purpose: 'incident-review',
+    prompt: 'Review this credential: api_key=sk_live_example_not_a_real_key and explain what to rotate.',
+    icon: ShieldAlert,
+  },
+] as const;
 
 /**
  * Minimal AI gateway test surface: pick a connected provider, type a prompt,
@@ -79,9 +100,18 @@ export function GatewayTest() {
       />
       <div className="mt-4 rounded-xl border border-line bg-ink-950/60 p-4">
         {connections.length === 0 ? (
-          <p className="text-sm text-mist-500">
-            Connect an AI provider below to activate the gateway. Provider keys are encrypted server-side and are never returned to the browser.
-          </p>
+          <div>
+            <p className="text-sm text-mist-500">
+              Connect an AI provider below to activate the gateway. Provider keys are encrypted server-side and are never returned to the browser.
+            </p>
+            <button
+              type="button"
+              onClick={() => document.getElementById('ai-providers')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+              className="mt-3 rounded-lg border border-accent-400/40 bg-accent-500/10 px-3 py-2 text-xs font-semibold text-accent-600 transition hover:border-accent-400/70"
+            >
+              Connect a provider
+            </button>
+          </div>
         ) : (
           <>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -127,6 +157,31 @@ export function GatewayTest() {
                   className="mt-1.5 w-full rounded-xl border border-line bg-ink-900 px-3 py-2 text-sm text-mist-100 outline-none placeholder:text-mist-600 focus:border-accent-400/60"
                 />
               </label>
+            </div>
+            <div className="mt-3">
+              <span className="text-xs font-semibold uppercase tracking-[0.16em] text-mist-500">Try an example</span>
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {EXAMPLES.map((example) => {
+                  const Icon = example.icon;
+                  return (
+                    <button
+                      key={example.label}
+                      type="button"
+                      onClick={() => {
+                        setPurpose(example.purpose);
+                        setPrompt(example.prompt);
+                        setError(null);
+                        setResult(null);
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2.5 py-1.5 text-xs font-medium text-mist-300 transition hover:border-accent-400/50 hover:text-mist-100"
+                    >
+                      <Icon size={13} className="text-accent-400" />
+                      {example.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-xs text-mist-600">Detection is automatic; your policies decide whether to allow, mask, review, or block.</p>
             </div>
             <label className="mt-3 block">
               <span className="text-xs font-semibold uppercase tracking-[0.16em] text-mist-500">
